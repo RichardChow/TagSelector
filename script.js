@@ -207,6 +207,18 @@ class TestSelectorApp {
         this.activeConfig = null; // 当前活跃编辑的配置 {id, name, originalTests}
         this.hasUnsavedChanges = false; // 是否有未保存的更改
         
+        // ===== 堆叠视图状态管理 =====
+        this.isStackView = true; // 默认使用堆叠视图
+        this.stackOrder = []; // 堆叠卡片顺序
+        this.currentStackIndex = 0; // 当前激活的卡片索引
+        this.stackWheelHandler = null; // 滚轮事件处理器
+        this.stackClickHandler = null; // 点击事件处理器
+        this.stackContainer = null; // 堆叠容器引用
+        
+        // ===== 下拉菜单状态管理 =====
+        this.dropdownCloseTimeout = null; // 下拉菜单延迟关闭超时器
+        this.activeDropdownEvents = null; // 当前活跃的下拉菜单事件处理器
+        
         this.init();
     }
 
@@ -3153,7 +3165,7 @@ class TestSelectorApp {
         }
     }
 
-    // 更新配置历史显示
+    // 更新配置历史显示 - 堆叠卡片模式
     updateConfigHistoryDisplay() {
         const container = document.getElementById('configHistoryList');
         if (!container) return;
@@ -3164,15 +3176,52 @@ class TestSelectorApp {
 
         if (configsToShow.length === 0) {
             if (this.configSearchTerm) {
-                container.innerHTML = '<p class="placeholder">No matching configs found</p>';
+                container.innerHTML = `
+                    <div class="config-stack-empty">
+                        <i class="fas fa-search"></i>
+                        <p>No matching configs found</p>
+                    </div>
+                `;
             } else {
-                container.innerHTML = '<p class="placeholder">No saved configs</p>';
+                container.innerHTML = `
+                    <div class="config-stack-empty">
+                        <i class="fas fa-layer-group"></i>
+                        <p>No saved configurations</p>
+                        <small>Click "Save Current Config" to get started</small>
+                    </div>
+                `;
             }
             return;
         }
 
-        let html = '';
-        configsToShow.forEach(config => {
+        // 默认使用堆叠视图，除非明确设置为传统视图
+        if (this.isStackView !== false) {
+            this.renderConfigStack(container, configsToShow);
+        } else {
+            this.renderTraditionalList(container, configsToShow);
+        }
+    }
+
+    // 渲染堆叠卡片
+    renderConfigStack(container, configs) {
+        // 排序：活跃配置在前，然后按时间排序
+        const sortedConfigs = [...configs].sort((a, b) => {
+            const aIsActive = this.activeConfig && this.activeConfig.id === a.id;
+            const bIsActive = this.activeConfig && this.activeConfig.id === b.id;
+            
+            if (aIsActive && !bIsActive) return -1;
+            if (!aIsActive && bIsActive) return 1;
+            
+            return new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt);
+        });
+
+        let stackHtml = '<div class="config-stack-container initializing">';
+        
+        // 渲染所有配置卡片，但只显示前4个在堆叠中
+        const maxVisible = 4;
+        const hasMore = sortedConfigs.length > maxVisible;
+
+        sortedConfigs.forEach((config, index) => {
             const configDate = new Date(config.createdAt).toLocaleDateString();
             const totalTests = config.tests.length;
             const totalTime = config.tests.reduce((sum, test) => sum + test.time, 0);
@@ -3180,9 +3229,148 @@ class TestSelectorApp {
             // 检查是否为当前活跃配置
             const isActiveConfig = this.activeConfig && this.activeConfig.id === config.id;
             const activeClass = isActiveConfig ? 'active' : '';
-            const activeIndicator = isActiveConfig ? '<i class="fas fa-edit config-editing-icon" title="Currently Editing"></i>' : '';
+            
+            // 状态判断
+            let status = 'normal';
+            let statusText = 'Saved';
+            if (isActiveConfig) {
+                status = this.hasUnsavedChanges ? 'modified' : 'active';
+                statusText = this.hasUnsavedChanges ? 'Modified' : 'Active';
+            }
             
             // 生成修改历史信息
+            const lastModification = config.modificationHistory && config.modificationHistory.length > 0 
+                ? config.modificationHistory[0] : null;
+
+            const historyBtnHtml = config.modificationHistory && config.modificationHistory.length > 0 ? `
+                <button class="config-stack-action-btn secondary" onclick="event.stopPropagation(); window.testApp.showModificationHistory('${config.id}')" title="View History">
+                    <i class="fas fa-history"></i> History
+                </button>
+            ` : '';
+            
+            // 初始状态：只显示前4个卡片，其他隐藏
+            const initialStyle = index >= maxVisible ? 'style="display: none;"' : '';
+            
+            stackHtml += `
+                <div class="config-stack-item ${activeClass}" 
+                     data-stack-index="${index}" 
+                     data-config-id="${config.id}"
+                     ${initialStyle}>
+                    <div class="config-stack-content">
+                        <div class="config-stack-header">
+                            <div class="config-stack-title">
+                                <div class="config-stack-name" title="${this.escapeHtml(config.name)}">
+                                    ${config.name}
+                                    ${isActiveConfig && this.hasUnsavedChanges ? ' <span style="color: #ff9800;">*</span>' : ''}
+                                </div>
+                                <div class="config-stack-description">
+                                    ${config.description || 'No description provided'}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="config-stack-stats">
+                            <div class="config-stack-stat">
+                                <i class="fas fa-tags"></i>
+                                ${totalTests} tags
+                            </div>
+                            <div class="config-stack-stat">
+                                <i class="fas fa-clock"></i>
+                                ${formatTime(totalTime)}
+                            </div>
+                            <div class="config-stack-stat">
+                                <i class="fas fa-calendar"></i>
+                                ${configDate}
+                            </div>
+                        </div>
+                        
+                        ${lastModification ? `
+                            <div class="config-stack-stat" style="margin-bottom: 8px; opacity: 0.8;">
+                                <i class="fas fa-user-edit"></i>
+                                Last modified by ${lastModification.modifier}
+                                ${lastModification.reason ? ` · ${lastModification.reason.substring(0, 25)}${lastModification.reason.length > 25 ? '...' : ''}` : ''}
+                            </div>
+                        ` : ''}
+                        
+                        <div class="config-stack-actions">
+                            <button class="config-stack-action-btn primary" onclick="event.stopPropagation(); window.testApp.applyConfig('${config.id}')" title="Load Config">
+                                <i class="fas fa-download"></i> Load
+                            </button>
+                            <div class="config-action-dropdown">
+                                <button class="config-stack-action-btn secondary dropdown-toggle" onclick="event.stopPropagation(); window.testApp.toggleActionDropdown('${config.id}')" title="More Actions">
+                                    <i class="fas fa-ellipsis-h"></i> More
+                                    <i class="fas fa-chevron-down dropdown-arrow"></i>
+                                </button>
+                                <div class="action-dropdown-menu" id="dropdown-${config.id}">
+                                    <button class="dropdown-item" onclick="event.stopPropagation(); window.testApp.handleDropdownAction('editConfig', '${config.id}')">
+                                        <i class="fas fa-edit"></i> Edit Name
+                                    </button>
+                                    <button class="dropdown-item" onclick="event.stopPropagation(); window.testApp.handleDropdownAction('exportSingleConfig', '${config.id}')">
+                                        <i class="fas fa-file-export"></i> Export
+                                    </button>
+                                    ${config.modificationHistory && config.modificationHistory.length > 0 ? `
+                                    <button class="dropdown-item" onclick="event.stopPropagation(); window.testApp.handleDropdownAction('showModificationHistory', '${config.id}')">
+                                        <i class="fas fa-history"></i> View History
+                                    </button>
+                                    ` : ''}
+                                </div>
+                            </div>
+                            <button class="config-stack-action-btn danger" onclick="event.stopPropagation(); window.testApp.deleteConfig('${config.id}')" title="Delete Config">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        // 添加指示器点 - 为所有配置生成指示器，不仅仅是可见的4个
+        if (sortedConfigs.length > 1) {
+            stackHtml += '<div class="config-stack-indicator">';
+            sortedConfigs.forEach((_, index) => {
+                const isActive = index === 0; // 初始状态第一个是激活的
+                stackHtml += `<div class="stack-dot ${isActive ? 'active' : ''}" 
+                                   onclick="window.testApp.switchToStackIndexByClick(${index})"
+                                   data-index="${index}"></div>`;
+            });
+            stackHtml += '</div>';
+        }
+
+        // 如果有超过4个配置，添加滚轮提示
+        if (hasMore) {
+            stackHtml += `
+                <div class="config-stack-scroll-hint">
+                    <i class="fas fa-mouse"></i> 
+                    <span>Use mouse wheel or click dots to browse all ${sortedConfigs.length} configs</span>
+                </div>
+            `;
+        }
+
+        stackHtml += '</div>';
+        container.innerHTML = stackHtml;
+        
+        // 存储当前配置顺序 - 包含所有配置，不仅仅是可见的4个
+        this.stackOrder = sortedConfigs.map(config => config.id);
+        this.currentStackIndex = 0; // 当前激活的卡片索引
+        
+        // 绑定新的交互事件
+        this.bindStackInteractionEvents();
+    }
+
+    // 渲染传统列表视图
+    renderTraditionalList(container, configs) {
+        let html = '<div class="traditional-config-list">';
+        html += '<button class="btn btn-small" onclick="window.testApp.switchToStackView()" style="margin-bottom: 15px;"><i class="fas fa-layer-group"></i> Stack View</button>';
+
+        configs.forEach(config => {
+            const configDate = new Date(config.createdAt).toLocaleDateString();
+            const totalTests = config.tests.length;
+            const totalTime = config.tests.reduce((sum, test) => sum + test.time, 0);
+            
+            const isActiveConfig = this.activeConfig && this.activeConfig.id === config.id;
+            const activeClass = isActiveConfig ? 'active' : '';
+            const activeIndicator = isActiveConfig ? '<i class="fas fa-edit config-editing-icon" title="Currently Editing"></i>' : '';
+            
             const lastModification = config.modificationHistory && config.modificationHistory.length > 0 
                 ? config.modificationHistory[0] : null;
             
@@ -3240,8 +3428,434 @@ class TestSelectorApp {
                 </div>
             `;
         });
-        
+
+        html += '</div>';
         container.innerHTML = html;
+    }
+
+    // 将指定配置移到堆叠前端（保持兼容性）
+    bringConfigToFront(configId) {
+        if (!this.stackOrder || this.stackOrder[0] === configId) return;
+        
+        const targetIndex = this.stackOrder.indexOf(configId);
+        if (targetIndex !== -1) {
+            this.switchToStackCard(targetIndex);
+        }
+    }
+
+    // 点击指示器切换到指定位置
+    switchToStackIndexByClick(targetIndex) {
+        // 点击指示器时直接切换到指定索引，不重新排序
+        this.switchByWheelNavigation(targetIndex);
+    }
+
+    // 切换到指定堆叠位置（保持兼容性）- 滚轮导航使用
+    switchToStackIndex(targetIndex) {
+        this.switchByWheelNavigation(targetIndex);
+    }
+
+    // 更新堆叠位置
+    updateStackPositions() {
+        const container = document.getElementById('configHistoryList');
+        if (!container) return;
+
+        const stackItems = container.querySelectorAll('.config-stack-item');
+        const indicators = container.querySelectorAll('.stack-dot');
+
+        // 添加过渡动画类
+        stackItems.forEach(item => {
+            item.classList.add('stack-transitioning');
+            // 保持3D变换样式
+            item.style.transformStyle = 'preserve-3d';
+        });
+
+        // 更新位置
+        this.stackOrder.forEach((configId, newIndex) => {
+            const item = container.querySelector(`[data-config-id="${configId}"]`);
+            if (item) {
+                item.setAttribute('data-stack-index', newIndex);
+                item.style.zIndex = 4 - newIndex;
+            }
+        });
+
+        // 更新指示器
+        indicators.forEach((dot, index) => {
+            dot.classList.toggle('active', index === 0);
+        });
+
+        // 移除过渡动画类
+        setTimeout(() => {
+            stackItems.forEach(item => {
+                item.classList.remove('stack-transitioning');
+            });
+        }, 800);
+    }
+
+    // 显示所有配置（展开视图）- 切换到传统列表视图
+    showAllConfigs() {
+        this.isStackView = false;
+        this.updateConfigHistoryDisplay();
+    }
+
+    // 切换回堆叠视图
+    switchToStackView() {
+        this.isStackView = true;
+        this.updateConfigHistoryDisplay();
+    }
+
+    // 绑定堆叠卡片交互事件
+    bindStackInteractionEvents() {
+        const container = document.getElementById('configHistoryList');
+        const stackContainer = container?.querySelector('.config-stack-container');
+        
+        if (!stackContainer) return;
+        
+        // 移除之前的事件监听器
+        this.removeStackInteractionEvents();
+        
+        // 滚轮事件处理（带防抖）
+        let wheelTimeout = null;
+        const handleWheel = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // 防抖处理，避免快速滚动
+            if (wheelTimeout) {
+                clearTimeout(wheelTimeout);
+            }
+            
+            wheelTimeout = setTimeout(() => {
+                const direction = e.deltaY > 0 ? 1 : -1; // 向下滚动为1，向上为-1
+                this.navigateStackByWheel(direction);
+            }, 100); // 100ms防抖延迟
+        };
+        
+        // 点击事件处理
+        const handleClick = (e) => {
+            const stackItem = e.target.closest('.config-stack-item');
+            if (!stackItem) return;
+            
+            const configId = stackItem.dataset.configId;
+            const currentDisplayIndex = parseInt(stackItem.dataset.stackIndex);
+            
+            // 如果点击的不是顶层卡片，则切换到该卡片
+            if (currentDisplayIndex !== 0) {
+                // 找到该配置在原始数组中的索引
+                const originalIndex = this.stackOrder.indexOf(configId);
+                if (originalIndex !== -1) {
+                    this.switchByWheelNavigation(originalIndex);
+                }
+            }
+        };
+        
+        // 绑定事件
+        stackContainer.addEventListener('wheel', handleWheel, { passive: false });
+        stackContainer.addEventListener('click', handleClick);
+        
+        // 存储事件处理器引用，用于后续移除
+        this.stackWheelHandler = handleWheel;
+        this.stackClickHandler = handleClick;
+        this.stackContainer = stackContainer;
+    }
+
+    // 移除堆叠卡片交互事件
+    removeStackInteractionEvents() {
+        if (this.stackContainer && this.stackWheelHandler) {
+            this.stackContainer.removeEventListener('wheel', this.stackWheelHandler);
+        }
+        if (this.stackContainer && this.stackClickHandler) {
+            this.stackContainer.removeEventListener('click', this.stackClickHandler);
+        }
+    }
+
+    // 通过滚轮导航堆叠卡片
+    navigateStackByWheel(direction) {
+        if (!this.stackOrder || this.stackOrder.length <= 1) return;
+        
+        const maxIndex = this.stackOrder.length - 1;
+        let newIndex = this.currentStackIndex + direction;
+        
+        // 循环边界处理
+        if (newIndex < 0) {
+            newIndex = maxIndex; // 循环到最后一个
+        } else if (newIndex > maxIndex) {
+            newIndex = 0; // 循环到第一个
+        }
+        
+        // 如果索引没有变化，则不执行切换
+        if (newIndex === this.currentStackIndex) return;
+        
+        // 使用专门的滚轮切换方法，不重新排序
+        this.switchByWheelNavigation(newIndex);
+    }
+
+    // 滚轮导航专用切换方法（不重新排序，只更新视觉效果）
+    switchByWheelNavigation(newIndex) {
+        if (!this.stackOrder || newIndex >= this.stackOrder.length || newIndex < 0) return;
+        if (newIndex === this.currentStackIndex) return;
+        
+        this.currentStackIndex = newIndex;
+        
+        // 只更新视觉效果，不重新排序
+        this.updateStackPositionsForWheel();
+    }
+
+    // 点击导航专用切换方法（重新排序，将目标卡片移到前面）
+    switchToStackCard(targetIndex) {
+        if (!this.stackOrder || targetIndex >= this.stackOrder.length || targetIndex < 0) return;
+        if (targetIndex === this.currentStackIndex) return;
+        
+        this.currentStackIndex = targetIndex;
+        const targetConfigId = this.stackOrder[targetIndex];
+        
+        // 重新排序，将目标卡片移到前面
+        const newOrder = [targetConfigId, ...this.stackOrder.filter(id => id !== targetConfigId)];
+        this.stackOrder = newOrder;
+        this.currentStackIndex = 0; // 重置为顶层
+        
+        // 添加切换动画效果
+        const targetCard = document.querySelector(`[data-config-id="${targetConfigId}"]`);
+        if (targetCard) {
+            targetCard.classList.add('switching');
+            setTimeout(() => {
+                targetCard.classList.remove('switching');
+            }, 600);
+        }
+        
+        // 更新堆叠位置
+        this.updateStackPositions();
+    }
+
+    // 滚轮导航专用的位置更新（不重新排序，基于currentStackIndex调整显示）
+    updateStackPositionsForWheel() {
+        const container = document.getElementById('configHistoryList');
+        if (!container) return;
+
+        const stackItems = container.querySelectorAll('.config-stack-item');
+        const indicators = container.querySelectorAll('.stack-dot');
+
+        // 添加过渡动画类
+        stackItems.forEach(item => {
+            item.classList.add('stack-transitioning');
+            item.style.transformStyle = 'preserve-3d';
+        });
+
+        // 重新计算每个卡片的显示索引
+        this.stackOrder.forEach((configId, originalIndex) => {
+            const item = container.querySelector(`[data-config-id="${configId}"]`);
+            if (item) {
+                // 计算新的显示索引：当前激活的卡片显示为索引0
+                let displayIndex = originalIndex - this.currentStackIndex;
+                
+                // 处理循环显示
+                if (displayIndex < 0) {
+                    displayIndex += this.stackOrder.length;
+                }
+                
+                // 只显示前4个位置的卡片
+                if (displayIndex < 4) {
+                    item.setAttribute('data-stack-index', displayIndex);
+                    item.style.zIndex = 4 - displayIndex;
+                    item.style.display = 'block';
+                } else {
+                    // 超出显示范围的卡片隐藏
+                    item.style.display = 'none';
+                }
+            }
+        });
+
+        // 更新指示器 - 确保与当前激活索引匹配
+        indicators.forEach((dot, index) => {
+            dot.classList.toggle('active', index === this.currentStackIndex);
+        });
+
+        // 移除过渡动画类
+        setTimeout(() => {
+            stackItems.forEach(item => {
+                item.classList.remove('stack-transitioning');
+            });
+        }, 600);
+    }
+
+    // 切换操作下拉菜单
+    toggleActionDropdown(configId) {
+        console.log('toggleActionDropdown called with configId:', configId); // 调试日志
+        
+        const dropdown = document.getElementById(`dropdown-${configId}`);
+        const toggleBtn = dropdown?.previousElementSibling;
+        
+        console.log('dropdown:', dropdown, 'toggleBtn:', toggleBtn); // 调试日志
+        
+        if (!dropdown || !toggleBtn) {
+            console.warn('dropdown or toggleBtn not found');
+            return;
+        }
+        
+        // 关闭其他所有下拉菜单
+        document.querySelectorAll('.action-dropdown-menu.show').forEach(menu => {
+            if (menu.id !== `dropdown-${configId}`) {
+                menu.classList.remove('show');
+                const btn = menu.previousElementSibling;
+                if (btn) btn.classList.remove('active');
+            }
+        });
+        
+        // 切换当前下拉菜单
+        const isShowing = dropdown.classList.contains('show');
+        console.log('isShowing:', isShowing); // 调试日志
+        
+        if (isShowing) {
+            this.closeActionDropdown(configId);
+        } else {
+            this.openActionDropdown(configId);
+        }
+    }
+
+    // 打开操作下拉菜单
+    openActionDropdown(configId) {
+        const dropdown = document.getElementById(`dropdown-${configId}`);
+        const toggleBtn = dropdown?.previousElementSibling;
+        const dropdownContainer = dropdown?.parentElement;
+        
+        if (!dropdown || !toggleBtn || !dropdownContainer) return;
+        
+        dropdown.classList.add('show');
+        toggleBtn.classList.add('active');
+        
+        console.log('dropdown opened'); // 调试日志
+        
+        // 点击外部关闭下拉菜单
+        const closeOnClickOutside = (e) => {
+            if (!dropdown.contains(e.target) && !toggleBtn.contains(e.target)) {
+                this.closeActionDropdown(configId);
+                document.removeEventListener('click', closeOnClickOutside);
+            }
+        };
+        
+        // 鼠标离开下拉菜单容器时关闭（带延迟）
+        const closeOnMouseLeave = () => {
+            // 添加即将关闭的视觉提示
+            dropdown.classList.add('closing');
+            
+            // 使用延迟关闭，给用户时间重新进入菜单
+            this.dropdownCloseTimeout = setTimeout(() => {
+                this.closeActionDropdown(configId);
+                dropdownContainer.removeEventListener('mouseleave', closeOnMouseLeave);
+            }, 300); // 300ms延迟
+        };
+        
+        // 鼠标重新进入时取消关闭
+        const cancelCloseOnMouseEnter = () => {
+            if (this.dropdownCloseTimeout) {
+                clearTimeout(this.dropdownCloseTimeout);
+                this.dropdownCloseTimeout = null;
+            }
+            // 移除即将关闭的视觉提示
+            dropdown.classList.remove('closing');
+        };
+        
+        // 绑定事件
+        setTimeout(() => {
+            document.addEventListener('click', closeOnClickOutside);
+        }, 10);
+        
+        dropdownContainer.addEventListener('mouseleave', closeOnMouseLeave);
+        dropdownContainer.addEventListener('mouseenter', cancelCloseOnMouseEnter);
+        
+        // 滚动时关闭下拉菜单
+        const closeOnScroll = () => {
+            this.closeActionDropdown(configId);
+            window.removeEventListener('scroll', closeOnScroll);
+        };
+        
+        // 窗口大小改变时关闭下拉菜单
+        const closeOnResize = () => {
+            this.closeActionDropdown(configId);
+            window.removeEventListener('resize', closeOnResize);
+        };
+        
+        window.addEventListener('scroll', closeOnScroll);
+        window.addEventListener('resize', closeOnResize);
+        
+        // 存储事件处理器引用以便清理
+        this.activeDropdownEvents = {
+            configId,
+            closeOnClickOutside,
+            closeOnMouseLeave,
+            cancelCloseOnMouseEnter,
+            closeOnScroll,
+            closeOnResize,
+            dropdownContainer
+        };
+    }
+
+    // 关闭操作下拉菜单
+    closeActionDropdown(configId) {
+        const dropdown = document.getElementById(`dropdown-${configId}`);
+        const toggleBtn = dropdown?.previousElementSibling;
+        
+        if (dropdown) {
+            dropdown.classList.remove('show', 'closing');
+        }
+        if (toggleBtn) {
+            toggleBtn.classList.remove('active');
+        }
+        
+        // 清理超时器
+        if (this.dropdownCloseTimeout) {
+            clearTimeout(this.dropdownCloseTimeout);
+            this.dropdownCloseTimeout = null;
+        }
+        
+        // 清理事件监听器
+        if (this.activeDropdownEvents && this.activeDropdownEvents.configId === configId) {
+            const { 
+                closeOnClickOutside, 
+                closeOnMouseLeave, 
+                cancelCloseOnMouseEnter, 
+                closeOnScroll, 
+                closeOnResize, 
+                dropdownContainer 
+            } = this.activeDropdownEvents;
+            
+            document.removeEventListener('click', closeOnClickOutside);
+            window.removeEventListener('scroll', closeOnScroll);
+            window.removeEventListener('resize', closeOnResize);
+            
+            if (dropdownContainer) {
+                dropdownContainer.removeEventListener('mouseleave', closeOnMouseLeave);
+                dropdownContainer.removeEventListener('mouseenter', cancelCloseOnMouseEnter);
+            }
+            
+            this.activeDropdownEvents = null;
+        }
+        
+        console.log('dropdown closed'); // 调试日志
+    }
+
+    // 处理下拉菜单项点击事件
+    handleDropdownAction(actionName, configId) {
+        console.log('handleDropdownAction called:', actionName, configId); // 调试日志
+        
+        // 先关闭下拉菜单
+        this.closeActionDropdown(configId);
+        
+        // 短暂延迟后执行操作，确保菜单关闭动画完成
+        setTimeout(() => {
+            switch (actionName) {
+                case 'editConfig':
+                    this.editConfig(configId);
+                    break;
+                case 'exportSingleConfig':
+                    this.exportSingleConfig(configId);
+                    break;
+                case 'showModificationHistory':
+                    this.showModificationHistory(configId);
+                    break;
+                default:
+                    console.warn('Unknown action:', actionName);
+            }
+        }, 100); // 100ms延迟，让关闭动画完成
     }
 
     // 渲染配置描述，支持展开/折叠
