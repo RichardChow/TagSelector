@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Automated Test Tag Selector</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <div class="header-main">
+                    <h1><i class="fas fa-robot"></i> Automated Test Tag Selector</h1>
+                    <p class="subtitle">Select test tag combinations and generate RobotFramework commands</p>
+                </div>
+                <div class="header-actions">
+                    <a href="https://wiki.rbbn.com/spaces/NPT/pages/1025599886/Automation+Test+Suite+Description+and+Tag" 
+                       target="_blank" 
+                       rel="noopener noreferrer" 
+                       class="wiki-link-btn" 
+                       title="View data source documentation">
+                        <i class="fas fa-book"></i>
+                        <span class="wiki-link-text">Data Source Wiki</span>
+                        <i class="fas fa-external-link-alt wiki-external-icon"></i>
+                    </a>
+                    <div class="settings-container">
+                        <button class="settings-toggle" id="settingsToggle">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                        <!-- Settings Panel -->
+                        <div class="settings-panel" id="settingsPanel">
+                            <div class="settings-content">
+                                <div class="data-source-info">
+                                    <h4><i class="fas fa-database"></i> Data Source</h4>
+                                    <p class="data-source-description">
+                                        <i class="fas fa-info-circle"></i> 
+                                        This tool uses test suite data from the official wiki documentation. 
+                                        <a href="https://wiki.rbbn.com/spaces/NPT/pages/1025599886/Automation+Test+Suite+Description+and+Tag" 
+                                           target="_blank" 
+                                           rel="noopener noreferrer" 
+                                           class="inline-wiki-link">
+                                            View data source
+                                            <i class="fas fa-external-link-alt"></i>
+                                        </a>
+                                    </p>
+                                </div>
+                                
+                                <h4><i class="fas fa-file-excel"></i> Excel Data Parsing</h4>
+                                
+                                <div class="setting-item">
+                                    <label>
+                                        <i class="fas fa-upload"></i> Upload Excel File:
+                                        <input type="file" id="excelFile" accept=".xlsx,.xls" style="margin-top: 8px; width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                    </label>
+                                    <small style="color: #666; display: block; margin-top: 5px;">
+                                        Supports .xlsx and .xls format Excel files<br>
+                                        <strong>Data Format Requirements:</strong> Feature Group | Feature Tag | Sub Feature Tag | Test Description | Suite Directory | Owner | test_Qty | test_time | confidence | remark
+                                    </small>
+                                </div>
+                                
+                                <div class="setting-item">
+                                    <label>
+                                        <i class="fas fa-table"></i> Worksheet Name:
+                                        <input type="text" id="sheetName" placeholder="Sheet1" value="Sheet1" style="margin-top: 8px; width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                    </label>
+                                    <small style="color: #666; display: block; margin-top: 5px;">
+                                        Specify the worksheet name to parse, default is Sheet1
+                                    </small>
+                                </div>
+                                
+                                <button id="parseExcel" class="btn btn-small" style="background: var(--success-color); margin-right: 10px;">
+                                    <i class="fas fa-file-import"></i> Parse Excel File
+                                </button>
+                                
+                                <button id="showCurrentData" class="btn btn-small" style="background: #17a2b8; margin-right: 10px;">
+                                    <i class="fas fa-eye"></i> View Current Data
+                                </button>
+                                
+                                <div class="setting-divider" style="margin: 15px 0;">
+                                    <hr style="border: 1px solid #eee;">
+                                    <h6 style="margin: 10px 0; color: var(--secondary-color);">
+                                        <i class="fas fa-database"></i> Data Management
+                                    </h6>
+                                </div>
+                                
+                                <div style="margin-bottom: 15px;">
+                                    <button id="clearCurrentData" class="btn btn-small" style="background: #dc3545; margin-right: 10px; width: 48%;">
+                                        <i class="fas fa-trash"></i> Clear Saved Data
+                                    </button>
+                                    <button id="resetToDefault" class="btn btn-small" style="background: #6c757d; width: 48%;">
+                                        <i class="fas fa-undo"></i> Reset to Default
+                                    </button>
+                                    <div style="font-size: 0.8rem; color: #666; margin-top: 5px;">
+                                        <strong>Clear Saved Data</strong>: Delete parsed data from localStorage<br>
+                                        <strong>Reset to Default</strong>: Clear all data and restore to initial state
+                                    </div>
+                                </div>
+                                
+                                <div id="excelPreview" class="excel-preview" style="display: none;">
+                                    <h6 style="margin: 10px 0 5px 0; color: var(--secondary-color);">Parse Preview:</h6>
+                                    <div id="excelPreviewContent" style="max-height: 150px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 0.85rem; border: 1px solid #e9ecef;">
+                                        Parsing...
+                                    </div>
+                                </div>
+                                
+                                <div class="setting-divider" style="margin: 20px 0;">
+                                    <hr style="border: 1px solid #eee;">
+                                    <h5 style="margin: 15px 0; color: var(--secondary-color);">
+                                        <i class="fas fa-flask"></i> Testing and Debugging
+                                    </h5>
+                                </div>
+                                
+                                <div style="margin-bottom: 15px;">
+                                    <button id="testRealData" class="btn btn-small" style="margin-right: 10px; background: #27ae60; width: 48%;">
+                                        <i class="fas fa-table"></i> Load Test Data
+                                    </button>
+                                    <button id="testRender" class="btn btn-small" style="background: #9b59b6; width: 48%;">
+                                        <i class="fas fa-bug"></i> Test Render
+                                    </button>
+                                    <button id="testExcelParsing" class="btn btn-small" style="margin-top: 10px; background: #f39c12; width: 48%; margin-right: 4%;">
+                                        <i class="fas fa-cog"></i> Test Excel Parse
+                                    </button>
+                                    <button id="testDebugBtn" class="btn btn-small" style="margin-top: 10px; background: #e74c3c; width: 48%;">
+                                        <i class="fas fa-tools"></i> Test Debug
+                                    </button>
+                                    <button id="testMultiLevel" class="btn btn-small" style="margin-top: 10px; background: #17a2b8; width: 48%; margin-right: 4%;">
+                                        <i class="fas fa-layer-group"></i> Test Multi-level
+                                    </button>
+                                    <button id="testSubFeatures" class="btn btn-small" style="margin-top: 10px; background: #6f42c1; width: 48%;">
+                                        <i class="fas fa-sitemap"></i> Test Sub Features
+                                    </button>
+                                    <div style="font-size: 0.8rem; color: #666; margin-top: 5px;">
+                                        Green: Load simulated test data<br>
+                                        Purple: Test interface rendering<br>
+                                        Orange: Test Excel parsing logic<br>
+                                        Red: Test buttons and notifications<br>
+                                        Blue: Test multi-level collapse functionality<br>
+                                        Purple: Test Sub Feature Tag functionality<br>
+                                        <strong>View Current Data</strong>: Display loaded feature groups and feature tags details
+                                    </div>
+                                </div>
+                                
+                                <div style="margin-bottom: 15px;">
+                                    <small style="color: #666;">
+                                        <i class="fas fa-info-circle"></i> Excel File Format Guidelines:<br>
+                                        • First row should be headers<br>
+                                        • Sub Feature Tag column can be empty<br>
+                                        • If Sub Feature Tag has value, will create second-level collapsible structure<br>
+                                        • Time format supports numbers (minutes) or "Xh Ym" format
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <div class="left-panel">
+                <div class="panel-header">
+                    <h2><i class="fas fa-list-ul"></i> Feature Tag Selector</h2>
+                    <button id="expandAll" class="btn btn-secondary">
+                        <i class="fas fa-expand-alt"></i> Expand All
+                    </button>
+                </div>
+
+                <div class="search-section">
+                    <div class="search-box-container">
+                        <i class="fas fa-search search-icon"></i>
+                        <input type="text" id="featureSearch" class="search-input" placeholder="Search feature groups or tags...">
+                        <button id="clearSearch" class="clear-search-btn" style="display: none;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="search-info" id="searchInfo" style="display: none;">
+                        <small id="searchResults"></small>
+                    </div>
+                </div>
+
+                <div class="feature-groups" id="featureGroups">
+                    <!-- feature groups will be dynamically generated by JavaScript -->
+                </div>
+            </div>
+
+            <div class="middle-panel">
+                <div class="panel-header">
+                    <h2><i class="fas fa-check-circle"></i> Selected Tags</h2>
+                    <div class="selected-stats" id="selectedStats">
+                        <span class="stats-item">
+                            <i class="fas fa-tag"></i> 0 selected
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="selected-items-enhanced">
+                    <div id="selectedList" class="selected-list-enhanced">
+                        <p class="placeholder">No selection</p>
+                    </div>
+                </div>
+                
+                <div class="selected-actions">
+                    <button id="clearAllBtn" class="btn btn-danger btn-full">
+                        <i class="fas fa-trash-alt"></i> Clear All Selections
+                    </button>
+                </div>
+            </div>
+
+            <div class="right-panel">
+                <div class="summary-section">
+                    <h3><i class="fas fa-clock"></i> Total Time</h3>
+                    <div class="time-display" id="totalTime">0 minutes</div>
+                </div>
+
+                <div class="generate-section">
+                    <div class="generate-buttons">
+                        <button id="generateBtn" class="btn btn-primary">
+                            <i class="fas fa-terminal"></i> Generate Command
+                        </button>
+                    </div>
+                </div>
+
+                <div class="result-section">
+                    <h3><i class="fas fa-code"></i> Generated Command</h3>
+                    <div class="command-output" id="commandOutput">
+                        <p class="placeholder">Please select feature tags and </p>
+                        <p class="placeholder">click Generate Command</p>
+                    </div>
+                    <button id="copyBtn" class="btn btn-copy" style="display: none;">
+                        <i class="fas fa-copy"></i> Copy Command
+                    </button>
+                </div>
+
+                <!-- 活跃配置指示器 -->
+                <div id="activeConfigIndicator" class="active-config-indicator" style="display: none;">
+                    <!-- 动态内容由JavaScript生成 -->
+                </div>
+
+                <div class="config-history">
+                    <h3><i class="fas fa-history"></i> Configuration History</h3>
+                    <div class="config-history-actions">
+                        <button id="saveConfigBtn" class="btn btn-small btn-secondary" disabled>
+                            <i class="fas fa-save"></i> Save Current Config
+                        </button>
+                        <button id="manageConfigBtn" class="btn btn-small btn-info">
+                            <i class="fas fa-cog"></i> Manage Configs
+                        </button>
+                    </div>
+                    <div class="config-search-section">
+                        <div class="config-search-box">
+                            <i class="fas fa-search config-search-icon"></i>
+                            <input type="text" id="configSearch" class="config-search-input" placeholder="Search config name or description...">
+                            <button id="clearConfigSearch" class="clear-config-search-btn" style="display: none;">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="config-search-info" id="configSearchInfo" style="display: none;">
+                            <small id="configSearchResults"></small>
+                        </div>
+                    </div>
+                    <div id="configHistoryList" class="config-history-list">
+                        <p class="placeholder">No saved configurations</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 工具提示 -->
+        <div id="tooltip" class="tooltip"></div>
+
+        <!-- Configuration Save Modal -->
+        <div id="saveConfigModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h4><i class="fas fa-save"></i> Save Test Configuration</h4>
+                    <button class="close-modal" id="closeSaveModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="configName">Configuration Name</label>
+                        <div class="config-name-input-group">
+                            <input type="text" id="configName" placeholder="e.g.: feature-branch-v1.2" class="form-input">
+                            <button type="button" id="regenerateConfigName" class="btn btn-small btn-secondary" title="Regenerate smart name">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                        <small class="form-hint">Suggest using branch name or test scenario name, click refresh button to regenerate smart name</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="configDescription">Configuration Description (Optional)</label>
+                        <textarea id="configDescription" placeholder="Brief description of this configuration's purpose..." class="form-textarea"></textarea>
+                    </div>
+                    <div class="config-preview">
+                        <h5>Configuration to be saved:</h5>
+                        <div id="configPreview" class="preview-content"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="confirmSaveConfig" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Save Configuration
+                    </button>
+                    <button id="cancelSaveConfig" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Configuration Management Modal -->
+        <div id="manageConfigModal" class="modal" style="display: none;">
+            <div class="modal-content modal-large">
+                <div class="modal-header">
+                    <h4><i class="fas fa-cog"></i> Manage Test Configurations</h4>
+                    <button class="close-modal" id="closeManageModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="config-management">
+                        <div class="config-actions">
+                            <button id="exportConfigs" class="btn btn-small btn-info">
+                                <i class="fas fa-download"></i> Export All
+                            </button>
+                            <button id="importConfigs" class="btn btn-small btn-success">
+                                <i class="fas fa-upload"></i> Import All
+                            </button>
+                            <button id="importNewConfig" class="btn btn-small btn-primary">
+                                <i class="fas fa-file-plus"></i> Import New
+                            </button>
+                            <input type="file" id="importFile" accept=".json" style="display: none;">
+                            <input type="file" id="importSingleFile" accept=".json" style="display: none;">
+                            <input type="file" id="importNewFile" accept=".json" style="display: none;">
+                        </div>
+                        <div class="config-modal-search-section">
+                            <div class="config-search-box">
+                                <i class="fas fa-search config-search-icon"></i>
+                                <input type="text" id="configModalSearch" class="config-search-input" placeholder="Search config name, description or tags...">
+                                <button id="clearConfigModalSearch" class="clear-config-search-btn" style="display: none;">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="config-search-info" id="configModalSearchInfo" style="display: none;">
+                                <small id="configModalSearchResults"></small>
+                            </div>
+                        </div>
+                        <div id="configManagementList" class="config-management-list">
+                            <p class="placeholder">No saved configurations</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="closeManageConfig" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Panel -->
+        <div class="settings-panel" id="settingsPanel">
+            <div class="settings-content">
+                <div class="data-source-info">
+                    <h4><i class="fas fa-database"></i> Data Source</h4>
+                    <p class="data-source-description">
+                        <i class="fas fa-info-circle"></i> 
+                        This tool uses test suite data from the official wiki documentation. 
+                        <a href="https://wiki.rbbn.com/spaces/NPT/pages/1025599886/Automation+Test+Suite+Description+and+Tag" 
+                           target="_blank" 
+                           rel="noopener noreferrer" 
+                           class="inline-wiki-link">
+                            View data source
+                            <i class="fas fa-external-link-alt"></i>
+                        </a>
+                    </p>
+                </div>
+                
+                <h4><i class="fas fa-file-excel"></i> Excel Data Parsing</h4>
+                
+                <div class="setting-item">
+                    <label>
+                        <i class="fas fa-upload"></i> Upload Excel File:
+                        <input type="file" id="excelFile" accept=".xlsx,.xls" style="margin-top: 8px; width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </label>
+                    <small style="color: #666; display: block; margin-top: 5px;">
+                        Supports .xlsx and .xls format Excel files<br>
+                        <strong>Data Format Requirements:</strong> Feature Group | Feature Tag | Sub Feature Tag | Test Description | Suite Directory | Owner | test_Qty | test_time | confidence | remark
+                    </small>
+                </div>
+                
+                <div class="setting-item">
+                    <label>
+                        <i class="fas fa-table"></i> Worksheet Name:
+                        <input type="text" id="sheetName" placeholder="Sheet1" value="Sheet1" style="margin-top: 8px; width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </label>
+                    <small style="color: #666; display: block; margin-top: 5px;">
+                        Specify the worksheet name to parse, default is Sheet1
+                    </small>
+                </div>
+                
+                <button id="parseExcel" class="btn btn-small" style="background: var(--success-color); margin-right: 10px;">
+                    <i class="fas fa-file-import"></i> Parse Excel File
+                </button>
+                
+                <button id="showCurrentData" class="btn btn-small" style="background: #17a2b8; margin-right: 10px;">
+                    <i class="fas fa-eye"></i> View Current Data
+                </button>
+                
+                <div class="setting-divider" style="margin: 15px 0;">
+                    <hr style="border: 1px solid #eee;">
+                    <h6 style="margin: 10px 0; color: var(--secondary-color);">
+                        <i class="fas fa-database"></i> Data Management
+                    </h6>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <button id="clearCurrentData" class="btn btn-small" style="background: #dc3545; margin-right: 10px; width: 48%;">
+                        <i class="fas fa-trash"></i> Clear Saved Data
+                    </button>
+                    <button id="resetToDefault" class="btn btn-small" style="background: #6c757d; width: 48%;">
+                        <i class="fas fa-undo"></i> Reset to Default
+                    </button>
+                    <div style="font-size: 0.8rem; color: #666; margin-top: 5px;">
+                        <strong>Clear Saved Data</strong>: Delete parsed data from localStorage<br>
+                        <strong>Reset to Default</strong>: Clear all data and restore to initial state
+                    </div>
+                </div>
+                
+                <div id="excelPreview" class="excel-preview" style="display: none;">
+                    <h6 style="margin: 10px 0 5px 0; color: var(--secondary-color);">Parse Preview:</h6>
+                    <div id="excelPreviewContent" style="max-height: 150px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 0.85rem; border: 1px solid #e9ecef;">
+                        Parsing...
+                    </div>
+                </div>
+                
+                <div class="setting-divider" style="margin: 20px 0;">
+                    <hr style="border: 1px solid #eee;">
+                    <h5 style="margin: 15px 0; color: var(--secondary-color);">
+                        <i class="fas fa-flask"></i> Testing and Debugging
+                    </h5>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <button id="testRealData" class="btn btn-small" style="margin-right: 10px; background: #27ae60; width: 48%;">
+                        <i class="fas fa-table"></i> Load Test Data
+                    </button>
+                    <button id="testRender" class="btn btn-small" style="background: #9b59b6; width: 48%;">
+                        <i class="fas fa-bug"></i> Test Render
+                    </button>
+                    <button id="testExcelParsing" class="btn btn-small" style="margin-top: 10px; background: #f39c12; width: 48%; margin-right: 4%;">
+                        <i class="fas fa-cog"></i> Test Excel Parse
+                    </button>
+                    <button id="testDebugBtn" class="btn btn-small" style="margin-top: 10px; background: #e74c3c; width: 48%;">
+                        <i class="fas fa-tools"></i> Test Debug
+                    </button>
+                    <button id="testMultiLevel" class="btn btn-small" style="margin-top: 10px; background: #17a2b8; width: 48%; margin-right: 4%;">
+                        <i class="fas fa-layer-group"></i> Test Multi-level
+                    </button>
+                    <button id="testSubFeatures" class="btn btn-small" style="margin-top: 10px; background: #6f42c1; width: 48%;">
+                        <i class="fas fa-sitemap"></i> Test Sub Features
+                    </button>
+                    <div style="font-size: 0.8rem; color: #666; margin-top: 5px;">
+                        Green: Load simulated test data<br>
+                        Purple: Test interface rendering<br>
+                        Orange: Test Excel parsing logic<br>
+                        Red: Test buttons and notifications<br>
+                        Blue: Test multi-level collapse functionality<br>
+                        Purple: Test Sub Feature Tag functionality<br>
+                        <strong>View Current Data</strong>: Display loaded feature groups and feature tags details
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <small style="color: #666;">
+                        <i class="fas fa-info-circle"></i> Excel File Format Guidelines:<br>
+                        • First row should be headers<br>
+                        • Sub Feature Tag column can be empty<br>
+                        • If Sub Feature Tag has value, will create second-level collapsible structure<br>
+                        • Time format supports numbers (minutes) or "Xh Ym" format
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="data.js"></script>
+    <script src="script.js"></script>
+</body>
+</html> 
