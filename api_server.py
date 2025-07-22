@@ -332,6 +332,84 @@ def backup_data():
         logger.error(f"❌ 备份异常: {str(e)}")
         return jsonify({'error': f'备份失败: {str(e)}'}), 500
 
+@app.route('/jenkins/109/api/saveFile', methods=['POST'])
+def save_file():
+    """保存配置文件到服务器指定路径"""
+    try:
+        request_data = request.get_json()
+        
+        if not request_data:
+            return jsonify({'error': '缺少请求数据'}), 400
+        
+        file_name = request_data.get('fileName')
+        content = request_data.get('content')
+        
+        if not file_name or not content:
+            return jsonify({'error': '缺少文件名或内容'}), 400
+        
+        # 配置服务器保存路径
+        # 注意：这个路径需要根据实际的服务器环境调整
+        server_path = r'\\netstore-ch\R&D TN China\R&D_Server\Version Management\Dev_Version\Version to V&V\AT'
+        
+        # 检查路径是否存在
+        if not os.path.exists(server_path):
+            # 如果网络路径不可访问，使用本地路径作为备选
+            local_backup_path = os.path.join(DATA_DIR, 'generated_configs')
+            if not os.path.exists(local_backup_path):
+                os.makedirs(local_backup_path)
+            
+            file_path = os.path.join(local_backup_path, file_name)
+            location_info = f"本地备份路径 (网络路径不可访问): {local_backup_path}"
+            logger.warning(f"⚠️ 网络路径不可访问，使用本地备份: {server_path}")
+        else:
+            file_path = os.path.join(server_path, file_name)
+            location_info = f"服务器路径: {server_path}"
+        
+        # 保存文件
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            
+            logger.info(f"📁 配置文件已保存: {file_path}")
+            
+            return jsonify({
+                'success': True,
+                'message': '文件保存成功',
+                'fileName': file_name,
+                'filePath': file_path,
+                'location': location_info,
+                'savedAt': datetime.now().isoformat(),
+                'fileSize': len(content.encode('utf-8'))
+            })
+            
+        except PermissionError:
+            # 权限错误，尝试本地备份
+            local_backup_path = os.path.join(DATA_DIR, 'generated_configs')
+            if not os.path.exists(local_backup_path):
+                os.makedirs(local_backup_path)
+            
+            backup_file_path = os.path.join(local_backup_path, file_name)
+            with open(backup_file_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            
+            logger.warning(f"⚠️ 权限不足，文件已保存到本地备份: {backup_file_path}")
+            
+            return jsonify({
+                'success': True,
+                'message': '文件已保存到本地备份路径 (权限不足)',
+                'fileName': file_name,
+                'filePath': backup_file_path,
+                'location': f"本地备份路径: {local_backup_path}",
+                'savedAt': datetime.now().isoformat(),
+                'fileSize': len(content.encode('utf-8')),
+                'warning': '原路径权限不足，已保存到本地备份'
+            })
+            
+    except Exception as e:
+        logger.error(f"❌ 保存文件异常: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': f'保存文件失败: {str(e)}'}), 500
+
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({'error': 'API端点不存在'}), 404

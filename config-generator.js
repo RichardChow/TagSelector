@@ -513,8 +513,21 @@ class ConfigFileGenerator {
         
         // 文件生成 - 检查元素是否存在
         if (this.elements.generateFile) {
-            this.elements.generateFile.addEventListener('click', () => {
-                this.generateConfigurationFile();
+            this.elements.generateFile.addEventListener('click', async () => {
+                // 防止重复点击
+                this.elements.generateFile.disabled = true;
+                this.elements.generateFile.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+                
+                try {
+                    await this.generateConfigurationFile();
+                } catch (error) {
+                    console.error('❌ 生成配置文件失败:', error);
+                    this.showNotification(`生成配置文件失败: ${error.message}`, 'error');
+                } finally {
+                    // 恢复按钮状态
+                    this.elements.generateFile.disabled = false;
+                    this.elements.generateFile.innerHTML = '<i class="fas fa-plus-circle"></i> <span>Generate Files</span>';
+                }
             });
         }
         
@@ -526,8 +539,8 @@ class ConfigFileGenerator {
         }
         
         if (this.elements.downloadAgain) {
-            this.elements.downloadAgain.addEventListener('click', () => {
-                this.downloadAgain();
+            this.elements.downloadAgain.addEventListener('click', async () => {
+                await this.downloadAgain();
             });
         }
         
@@ -864,9 +877,9 @@ class ConfigFileGenerator {
         }
     }
     
-    generateConfigurationFile() {
+    async generateConfigurationFile() {
         // 使用新的多文件生成逻辑
-        this.generateMultipleConfigurationFiles();
+        await this.generateMultipleConfigurationFiles();
     }
     
     downloadToLocal(content, fileName) {
@@ -888,17 +901,55 @@ class ConfigFileGenerator {
         this.showNotification(`文件已下载: ${fileName}`, 'success');
     }
     
-    saveToServer(content, fileName) {
-        // 注意：这里是模拟保存到服务器
-        // 实际实现需要后端API支持
-        console.log('模拟保存到服务器:', fileName);
-        console.log('服务器路径:', '\\\\netstore-ch\\R&D TN China\\R&D_Server\\Version Management\\Dev_Version\\Version to V&V\\AT');
-        console.log('文件内容:', content);
-        
-        // 模拟网络延迟
-        setTimeout(() => {
-            this.showNotification(`文件已保存到服务器: ${fileName}`, 'success');
-        }, 1000);
+    async saveToServer(content, fileName) {
+        try {
+            console.log('🔄 正在保存文件到服务器:', fileName);
+            
+            // 调用真实的API
+            const response = await fetch(`${this.serverDataManager.baseUrl}/saveFile`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    fileName: fileName,
+                    content: content
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                console.log('✅ 文件保存成功:', result);
+                
+                let message = `文件已保存: ${result.fileName}`;
+                if (result.warning) {
+                    message += `\n⚠️ ${result.warning}`;
+                    this.showNotification(message, 'warning');
+                } else {
+                    this.showNotification(message, 'success');
+                }
+                
+                // 显示详细的保存结果
+                this.showServerSaveResult(result);
+                
+            } else {
+                throw new Error(result.error || '服务器返回未知错误');
+            }
+            
+        } catch (error) {
+            console.error('❌ 保存到服务器失败:', error);
+            this.showNotification(`保存到服务器失败: ${error.message}`, 'error');
+            
+            // 询问用户是否要下载到本地作为备选方案
+            if (confirm('保存到服务器失败，是否要下载到本地作为备选方案？')) {
+                this.downloadToLocal(content, fileName);
+            }
+        }
     }
     
     showResultModal(fileName, location, content) {
@@ -937,12 +988,17 @@ class ConfigFileGenerator {
         }
     }
     
-    downloadAgain() {
+    async downloadAgain() {
         if (this.lastGenerated) {
-            if (this.lastGenerated.location === 'local') {
-                this.downloadToLocal(this.lastGenerated.content, this.lastGenerated.fileName);
-            } else {
-                this.saveToServer(this.lastGenerated.content, this.lastGenerated.fileName);
+            try {
+                if (this.lastGenerated.location === 'local') {
+                    this.downloadToLocal(this.lastGenerated.content, this.lastGenerated.fileName);
+                } else {
+                    await this.saveToServer(this.lastGenerated.content, this.lastGenerated.fileName);
+                }
+            } catch (error) {
+                console.error('❌ 重新生成文件失败:', error);
+                this.showNotification(`重新生成文件失败: ${error.message}`, 'error');
             }
         }
     }
@@ -1248,7 +1304,7 @@ class ConfigFileGenerator {
     }
     
     // 生成多个配置文件
-    generateMultipleConfigurationFiles() {
+    async generateMultipleConfigurationFiles() {
         if (this.selectedFiles.length === 0) {
             this.showNotification('Please select at least one file to generate', 'warning');
             return;
@@ -1262,23 +1318,32 @@ class ConfigFileGenerator {
         
         // 为每个选择的文件生成配置
         const generatedFiles = [];
+        const saveLocation = document.querySelector('input[name="saveLocation"]:checked').value;
         
-        this.selectedFiles.forEach(fileName => {
-            const content = this.generateYAMLContentForFile(fileName);
-            const finalFileName = this.resolveDuplicateFileName(fileName, generatedFiles);
-            generatedFiles.push(finalFileName);
-            
-            // 根据保存位置选择
-            const saveLocation = document.querySelector('input[name="saveLocation"]:checked').value;
-            if (saveLocation === 'local') {
-                this.downloadToLocal(content, finalFileName);
-            } else {
-                this.saveToServer(content, finalFileName);
+        // 显示进度提示
+        this.showNotification(`开始生成 ${this.selectedFiles.length} 个配置文件...`, 'info');
+        
+        try {
+            for (const fileName of this.selectedFiles) {
+                const content = this.generateYAMLContentForFile(fileName);
+                const finalFileName = this.resolveDuplicateFileName(fileName, generatedFiles);
+                generatedFiles.push(finalFileName);
+                
+                // 根据保存位置选择
+                if (saveLocation === 'local') {
+                    this.downloadToLocal(content, finalFileName);
+                } else {
+                    await this.saveToServer(content, finalFileName);
+                }
             }
-        });
-        
-        // 显示结果
-        this.showMultiFileResult(generatedFiles);
+            
+            // 显示结果
+            this.showMultiFileResult(generatedFiles);
+            
+        } catch (error) {
+            console.error('❌ 批量生成文件时出错:', error);
+            this.showNotification(`批量生成文件失败: ${error.message}`, 'error');
+        }
     }
     
     generateYAMLContentForFile(fileName) {
@@ -1515,6 +1580,99 @@ class ConfigFileGenerator {
         
         this.showNotification(`Added custom file: ${fileName}`, 'success');
                 console.log(`自定义文件已添加完成: ${fileName}`, this.selectedFiles);
+    }
+    
+    // 显示服务器保存结果的详细信息
+    showServerSaveResult(result) {
+        const resultHtml = `
+            <div style="
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: white;
+                padding: 24px;
+                border-radius: 12px;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+                z-index: 10000;
+                max-width: 500px;
+                min-width: 350px;
+                border: 1px solid #e9ecef;
+            ">
+                <div style="
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    margin-bottom: 16px;
+                    padding-bottom: 12px;
+                    border-bottom: 1px solid #e9ecef;
+                ">
+                    <i class="fas fa-check-circle" style="color: #28a745; font-size: 1.5rem;"></i>
+                    <h3 style="margin: 0; color: #2c3e50;">文件保存成功</h3>
+                </div>
+                
+                <div style="margin-bottom: 12px;">
+                    <strong>文件名:</strong> ${result.fileName}
+                </div>
+                
+                <div style="margin-bottom: 12px;">
+                    <strong>保存位置:</strong><br>
+                    <code style="
+                        background: #f8f9fa;
+                        padding: 4px 8px;
+                        border-radius: 4px;
+                        font-size: 0.85rem;
+                        word-break: break-all;
+                    ">${result.location}</code>
+                </div>
+                
+                <div style="margin-bottom: 12px;">
+                    <strong>文件大小:</strong> ${this.formatFileSize(result.fileSize)}
+                </div>
+                
+                <div style="margin-bottom: 16px;">
+                    <strong>保存时间:</strong> ${new Date(result.savedAt).toLocaleString()}
+                </div>
+                
+                ${result.warning ? `
+                    <div style="
+                        background: #fff3cd;
+                        color: #856404;
+                        padding: 12px;
+                        border-radius: 6px;
+                        border-left: 4px solid #ffc107;
+                        margin-bottom: 16px;
+                    ">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>注意:</strong> ${result.warning}
+                    </div>
+                ` : ''}
+                
+                <div style="text-align: center;">
+                    <button onclick="this.parentElement.parentElement.remove()" style="
+                        background: var(--primary-color);
+                        color: white;
+                        border: none;
+                        padding: 8px 16px;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        font-size: 0.9rem;
+                    ">确定</button>
+                </div>
+            </div>
+            
+            <div style="
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.5);
+                z-index: 9999;
+            " onclick="this.nextElementSibling.remove(); this.remove();"></div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', resultHtml);
     }
     
     // 移除数据来源指示器
