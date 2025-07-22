@@ -1610,20 +1610,40 @@ class TestSelectorApp {
             }
         }, true); // 使用capture阶段确保能捕获到事件
 
-        // 按钮事件
-        document.getElementById('generateBtn').addEventListener('click', () => this.generateCommand());
-        document.getElementById('copyBtn').addEventListener('click', () => this.copyCommand());
-        document.getElementById('clearAllBtn').addEventListener('click', () => this.clearAllSelections());
-        document.getElementById('expandAll').addEventListener('click', () => this.toggleAllGroups());
+        // 按钮事件 - 检查元素是否存在
+        const generateBtn = document.getElementById('generateBtn');
+        if (generateBtn) generateBtn.addEventListener('click', () => this.generateCommand());
         
-        // 配置历史按钮
-        document.getElementById('saveConfigBtn').addEventListener('click', () => this.showSaveConfigModal());
-        document.getElementById('manageConfigBtn').addEventListener('click', () => this.showManageConfigModal());
-        document.getElementById('parseExcel').addEventListener('click', () => this.parseExcelFile());
-        document.getElementById('showCurrentData').addEventListener('click', () => this.showCurrentDataDetails());
-        document.getElementById('clearCurrentData')?.addEventListener('click', () => this.confirmClearCurrentData());
-        document.getElementById('resetToDefault')?.addEventListener('click', () => this.resetToDefaultData());
-        document.getElementById('settingsToggle').addEventListener('click', (e) => {
+        const copyBtn = document.getElementById('copyBtn');
+        if (copyBtn) copyBtn.addEventListener('click', () => this.copyCommand());
+        
+        const clearAllBtn = document.getElementById('clearAllBtn');
+        if (clearAllBtn) clearAllBtn.addEventListener('click', () => this.clearAllSelections());
+        
+        const expandAll = document.getElementById('expandAll');
+        if (expandAll) expandAll.addEventListener('click', () => this.toggleAllGroups());
+        
+        // 配置历史按钮 - 检查元素是否存在
+        const saveConfigBtn = document.getElementById('saveConfigBtn');
+        if (saveConfigBtn) saveConfigBtn.addEventListener('click', () => this.showSaveConfigModal());
+        
+        const manageConfigBtn = document.getElementById('manageConfigBtn');
+        if (manageConfigBtn) manageConfigBtn.addEventListener('click', () => this.showManageConfigModal());
+        
+        const parseExcel = document.getElementById('parseExcel');
+        if (parseExcel) parseExcel.addEventListener('click', () => this.parseExcelFile());
+        
+        const showCurrentData = document.getElementById('showCurrentData');
+        if (showCurrentData) showCurrentData.addEventListener('click', () => this.showCurrentDataDetails());
+        
+        const clearCurrentData = document.getElementById('clearCurrentData');
+        if (clearCurrentData) clearCurrentData.addEventListener('click', () => this.confirmClearCurrentData());
+        
+        const resetToDefault = document.getElementById('resetToDefault');
+        if (resetToDefault) resetToDefault.addEventListener('click', () => this.resetToDefaultData());
+        
+        const settingsToggle = document.getElementById('settingsToggle');
+        if (settingsToggle) settingsToggle.addEventListener('click', (e) => {
             e.stopPropagation();
             this.toggleSettings();
         });
@@ -3428,7 +3448,7 @@ class TestSelectorApp {
                 </div>
             `;
         });
-
+        
         html += '</div>';
         container.innerHTML = html;
     }

@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Txt file generator</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="config-generator.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container config-generator-container">
+        <!-- 顶部导航栏 -->
+        <header class="config-generator-header">
+            <div class="header-content">
+                <div class="header-left">
+                    <a href="index.html" class="back-link">
+                        <i class="fas fa-arrow-left"></i> Back to Tag Selector
+                    </a>
+                </div>
+                <div class="header-center">
+                    <h1><i class="fas fa-file-code"></i> txt Generator</h1>
+                    <p class="subtitle">Generate deployment txt files from saved test configurations</p>
+                </div>
+                <div class="header-right">
+                    <div class="generator-stats" id="generatorStats">
+                        <span class="stat-item">
+                            <i class="fas fa-layer-group"></i> 
+                            <span id="totalConfigs">0</span> configs
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- 主内容区域 -->
+        <div class="generator-main">
+            <!-- 左栏：配置文件选择 -->
+            <div class="generator-left-panel">
+                <div class="panel-header">
+                    <h2><i class="fas fa-list-check"></i> Select </h2>
+                    <button id="refreshConfigs" class="btn btn-small btn-secondary">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                
+                <div class="config-search-section">
+                    <div class="search-box-container">
+                        <i class="fas fa-search search-icon"></i>
+                        <input type="text" id="configSearch" class="search-input" placeholder="Search configurations...">
+                        <button id="clearConfigSearch" class="clear-search-btn" style="display: none;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="config-selection-list" id="configSelectionList">
+                    <div class="config-placeholder">
+                        <i class="fas fa-folder-open"></i>
+                        <p>No saved configurations found</p>
+                        <small>Go back to the main page to create some test configurations first</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 中栏：参数配置 -->
+            <div class="generator-middle-panel">
+                <div class="panel-header">
+                    <h2><i class="fas fa-cog"></i> Parameters</h2>
+                    <div class="config-status" id="configStatus">
+                        <span class="status-indicator">Ready to configure</span>
+                    </div>
+                </div>
+
+                <div class="parameter-form" id="parameterForm">
+                    <!-- FTP Path - 必填 -->
+                    <div class="form-group required">
+                        <label for="ftpPath">
+                            <i class="fas fa-server"></i> ftp path
+                            <span class="required-mark">*</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            id="ftpPath" 
+                            class="form-input" 
+                            placeholder="\\netstore-ch\..."
+                            required
+                        >
+                        <small class="form-hint">Required: Server path for the version files</small>
+                    </div>
+
+                    <!-- Patch Path - 可选 -->
+                    <div class="form-group optional">
+                        <label for="patchPath">
+                            <i class="fas fa-folder"></i> patch path
+                        </label>
+                        <input 
+                            type="text" 
+                            id="patchPath" 
+                            class="form-input" 
+                            placeholder="Optional patch path..."
+                        >
+                        <small class="form-hint">Optional: Additional patch file path (empty = not included)</small>
+                    </div>
+
+                    <!-- FTP Ring - 可选 -->
+                    <div class="form-group optional">
+                        <label for="ftpRing">
+                            <i class="fas fa-ring"></i> ftp ring
+                        </label>
+                        <select id="ftpRing" class="form-select">
+                            <option value="none">none</option>
+                            <option value="all">all</option>
+                        </select>
+                        <small class="form-hint">Optional: Only 'all' will be included in output</small>
+                    </div>
+
+                    <!-- File Type - 可选 -->
+                    <div class="form-group optional">
+                        <label for="fileType">
+                            <i class="fas fa-file-archive"></i> file type
+                        </label>
+                        <select id="fileType" class="form-select">
+                            <option value="tar">tar</option>
+                            <option value="bin">bin</option>
+                        </select>
+                        <small class="form-hint">Optional: Only 'bin' will be included in output</small>
+                    </div>
+
+                    <!-- Args - 自动生成 -->
+                    <div class="form-group auto-generated">
+                        <div class="args-header">
+                            <label>
+                                <i class="fas fa-terminal"></i> args (robot arguments)
+                            </label>
+                            <div class="args-info">
+                                <i class="fas fa-info-circle"></i>
+                                <span id="argsCount">0</span> tags
+                            </div>
+                        </div>
+                        <div class="args-preview" id="argsPreview">
+                            <div class="args-placeholder">
+                                <i class="fas fa-magic"></i>
+                                <p>Arguments will be auto-generated from selected configuration</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右栏：预览和生成 -->
+            <div class="generator-right-panel">
+                <div class="panel-header">
+                    <h2><i class="fas fa-eye"></i> Preview & Generate</h2>
+                    <div class="preview-status" id="previewStatus">
+                        <span class="status-indicator warning">
+                            <i class="fas fa-exclamation-triangle"></i> Fill in FTP path
+                        </span>
+                    </div>
+                </div>
+
+                <!-- YAML 预览 -->
+                <div class="preview-section">
+                    <h3><i class="fas fa-code"></i> File Preview</h3>
+                    <div class="preview-container">
+                        <div class="preview-header">
+                            <span class="file-format">YAML Format (.txt)</span>
+                            <button id="copyPreview" class="btn btn-small btn-secondary" disabled>
+                                <i class="fas fa-copy"></i> Copy
+                            </button>
+                        </div>
+                        <div class="yaml-preview" id="yamlPreview">
+                            <div class="preview-placeholder">
+                                <i class="fas fa-file-code"></i>
+                                <p>Configuration preview will appear here</p>
+                                <small>Fill in the required FTP path to see the preview</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 环境文件选择器 -->
+                <div class="environment-section">
+                    <h3><i class="fas fa-layer-group"></i> Environment Files</h3>
+                    <div class="environment-selector" id="environmentSelector">
+                        
+                        <!-- AT 环境 -->
+                        <div class="env-category" data-env="at">
+                            <div class="env-header">
+                                <div class="env-title">
+                                    <i class="fas fa-server"></i>
+                                    <span>AT Environment</span>
+                                    <div class="env-actions">
+                                        <button class="btn-select-all" data-env="at">Select All</button>
+                                        <button class="btn-toggle-env" data-env="at">
+                                            <i class="fas fa-chevron-down"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="env-content">
+                                <div class="file-group">
+                                    <div class="file-item" data-file="104.txt" data-priority="0">
+                                        <input type="checkbox" id="at_104">
+                                        <label for="at_104">
+                                            <span class="file-name">104.txt</span>
+                                        </label>
+                                    </div>
+                                    <div class="file-item" data-file="105.txt" data-priority="0">
+                                        <input type="checkbox" id="at_105">
+                                        <label for="at_105">
+                                            <span class="file-name">105.txt</span>
+                                        </label>
+                                    </div>
+                                    <div class="file-item" data-file="106.txt" data-priority="0">
+                                        <input type="checkbox" id="at_106">
+                                        <label for="at_106">
+                                            <span class="file-name">106.txt</span>
+                                        </label>
+                                    </div>
+                                    <div class="file-item advanced" data-file="104_25_4bmr.txt" data-priority="1">
+                                        <input type="checkbox" id="at_104_advanced">
+                                        <label for="at_104_advanced">
+                                            <span class="file-name">104_25_4bmr.txt</span>
+                                            <span class="file-badge variant"></span>
+                                        </label>
+                                    </div>
+                                    <div class="file-item advanced" data-file="1022l_105.txt" data-priority="1">
+                                        <input type="checkbox" id="at_105_advanced">
+                                        <label for="at_105_advanced">
+                                            <span class="file-name">1022l_105.txt</span>
+                                            <span class="file-badge variant"></span>
+                                        </label>
+                                    </div>
+                                    <div class="file-item advanced" data-file="1012d_106.txt" data-priority="1">
+                                        <input type="checkbox" id="at_106_advanced1">
+                                        <label for="at_106_advanced1">
+                                            <span class="file-name">1012d_106.txt</span>
+                                            <span class="file-badge variant"></span>
+                                        </label>
+                                    </div>
+                                    <div class="file-item advanced" data-file="106_sec.txt" data-priority="1">
+                                        <input type="checkbox" id="at_106_advanced2">
+                                        <label for="at_106_advanced2">
+                                            <span class="file-name">106_sec.txt</span>
+                                            <span class="file-badge variant"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Data 环境 -->
+                        <div class="env-category" data-env="data">
+                            <div class="env-header">
+                                <div class="env-title">
+                                    <i class="fas fa-database"></i>
+                                    <span>Data Environment</span>
+                                    <div class="env-actions">
+                                        <button class="btn-select-all" data-env="data">Select All</button>
+                                        <button class="btn-toggle-env" data-env="data">
+                                            <i class="fas fa-chevron-down"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="env-content">
+                                <div class="file-group">
+                                    <div class="file-item" data-file="2100.txt" data-priority="0">
+                                        <input type="checkbox" id="data_2100">
+                                        <label for="data_2100">
+                                            <span class="file-name">2100.txt</span>
+                                        </label>
+                                    </div>
+                                    <div class="file-item" data-file="2300.txt" data-priority="0">
+                                        <input type="checkbox" id="data_2300">
+                                        <label for="data_2300">
+                                            <span class="file-name">2300.txt</span>
+                                        </label>
+                                    </div>
+                                    <div class="file-item" data-file="2400.txt" data-priority="0">
+                                        <input type="checkbox" id="data_2400">
+                                        <label for="data_2400">
+                                            <span class="file-name">2400.txt</span>
+                                        </label>
+                                    </div>
+                                    <div class="file-item" data-file="2507.txt" data-priority="0">
+                                        <input type="checkbox" id="data_2507">
+                                        <label for="data_2507">
+                                            <span class="file-name">2507.txt</span>
+                                        </label>
+                                    </div>
+                                    <div class="file-item" data-file="2714.txt" data-priority="0">
+                                        <input type="checkbox" id="data_2714">
+                                        <label for="data_2714">
+                                            <span class="file-name">2714.txt</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- CES|PTP 环境 -->
+                        <div class="env-category" data-env="ces-ptp">
+                            <div class="env-header">
+                                <div class="env-title">
+                                    <i class="fas fa-network-wired"></i>
+                                    <span>CES | PTP Environment</span>
+                                    <div class="env-actions">
+                                        <button class="btn-select-all" data-env="ces-ptp">Select All</button>
+                                        <button class="btn-toggle-env" data-env="ces-ptp">
+                                            <i class="fas fa-chevron-down"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="env-content">
+                                <div class="file-group">
+                                    <div class="file-item" data-file="ces.txt" data-priority="0">
+                                        <input type="checkbox" id="ces_main">
+                                        <label for="ces_main">
+                                            <span class="file-name">ces.txt</span>
+                                        </label>
+                                    </div>
+                                    <div class="file-item" data-file="ptp.txt" data-priority="0">
+                                        <input type="checkbox" id="ptp_main">
+                                        <label for="ptp_main">
+                                            <span class="file-name">ptp.txt</span>
+                                        </label>
+                                    </div>
+                                    <div class="file-item" data-file="ces(10).txt" data-priority="0">
+                                        <input type="checkbox" id="ces_10">
+                                        <label for="ces_10">
+                                            <span class="file-name">ces(10).txt</span>
+                                        </label>
+                                    </div>
+                                    <div class="file-item" data-file="ptp(10).txt" data-priority="0">
+                                        <input type="checkbox" id="ptp_10">
+                                        <label for="ptp_10">
+                                            <span class="file-name">ptp(10).txt</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 自定义文件 -->
+                        <div class="env-category" data-env="custom">
+                            <div class="env-header">
+                                <div class="env-title">
+                                    <i class="fas fa-edit"></i>
+                                    <span>Custom Files</span>
+                                    <div class="custom-input-actions">
+                                        <div class="custom-input-group">
+                                            <input 
+                                                type="text" 
+                                                id="customFileName" 
+                                                class="custom-file-input" 
+                                                placeholder="Enter filename (e.g. 108)"
+                                                maxlength="50"
+                                            >
+                                            <button class="btn-add-custom" id="addCustomFile" title="Add custom file to selected files list">
+                                                <i class="fas fa-plus-circle"></i>
+                                                <span class="btn-text">Add</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 选择摘要 -->
+                    <div class="selection-summary" id="selectionSummary">
+                        <div class="summary-header">
+                            <i class="fas fa-list-check"></i>
+                            <span>Selected Files: <span id="selectedCount">0</span></span>
+                            <button id="clearAllFiles" class="btn-clear-all" title="Clear all selections" style="display: none;">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="summary-files" id="summaryFiles">
+                            <span class="no-selection">No files selected</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 保存位置选择 -->
+                <div class="save-location-section">
+                    <h3><i class="fas fa-save"></i> Save Location</h3>
+                    <div class="location-options">
+                        <div class="location-option">
+                            <input type="radio" id="saveLocal" name="saveLocation" value="local" checked>
+                            <label for="saveLocal" class="location-label">
+                                <i class="fas fa-download"></i>
+                                <div class="location-info">
+                                    <span class="location-title">Download to Local</span>
+                                    <small>Save file to your computer's download folder</small>
+                                </div>
+                            </label>
+                        </div>
+                        <div class="location-option">
+                            <input type="radio" id="saveServer" name="saveLocation" value="server">
+                            <label for="saveServer" class="location-label">
+                                <i class="fas fa-server"></i>
+                                <div class="location-info">
+                                    <span class="location-title">Save to Server</span>
+                                    <small>\\netstore-ch\R&D TN China\R&D_Server\Version Management\Dev_Version\Version to V&V\AT</small>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 生成按钮 -->
+                <div class="generate-section">
+                    <button id="generateFile" class="btn btn-primary btn-generate" disabled>
+                        <i class="fas fa-magic"></i>
+                        <span>Generate Configuration Files</span>
+                    </button>
+                    <div class="generate-info" id="generateInfo">
+                        <small><i class="fas fa-info-circle"></i> FTP path is required to generate files</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 生成结果模态框 -->
+        <div id="generateResultModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h4><i class="fas fa-check-circle"></i> File Generated Successfully</h4>
+                    <button class="close-modal" id="closeResultModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="result-info">
+                        <div class="result-item">
+                            <label>File Name:</label>
+                            <span id="resultFileName">config-deployment.txt</span>
+                        </div>
+                        <div class="result-item">
+                            <label>Save Location:</label>
+                            <span id="resultLocation">Local Download</span>
+                        </div>
+                        <div class="result-item">
+                            <label>File Size:</label>
+                            <span id="resultFileSize">1.2 KB</span>
+                        </div>
+                        <div class="result-item">
+                            <label>Generated At:</label>
+                            <span id="resultTimestamp">2024-01-15 14:30:25</span>
+                        </div>
+                    </div>
+                    <div class="result-actions">
+                        <button id="downloadAgain" class="btn btn-primary">
+                            <i class="fas fa-download"></i> Download Again
+                        </button>
+                        <button id="generateAnother" class="btn btn-secondary">
+                            <i class="fas fa-plus"></i> Generate Another
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通知提示 -->
+    <div id="notification" class="notification"></div>
+
+    <script src="data.js"></script>
+    <script src="script.js"></script>
+    <script src="config-generator.js"></script>
+</body>
+</html> 
