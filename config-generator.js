@@ -1,10 +1,57 @@
 /**
+ * 轻量级服务器数据管理类（专用于config-generator）
+ * 避免与script.js中的ServerDataManager冲突
+ */
+class ConfigServerDataManager {
+    constructor() {
+        // Python API服务器地址
+        this.baseUrl = 'http://10.91.90.109:5000/jenkins/109/api';
+    }
+
+    // 加载用户配置
+    async loadConfigs() {
+        try {
+            const response = await fetch(`${this.baseUrl}/loadConfigs`);
+            
+            if (!response.ok) {
+                if (response.status === 404) {
+                    return { configs: [], source: 'server', isEmpty: true };
+                }
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log('✅ 从服务器加载配置');
+            return { 
+                configs: result.configs || [], 
+                source: 'server',
+                isEmpty: false
+            };
+        } catch (error) {
+            console.error('❌ 从服务器加载配置失败:', error);
+            // 降级到localStorage
+            const saved = localStorage.getItem('testConfigs');
+            const configs = saved ? JSON.parse(saved) : [];
+            console.log('📝 降级使用本地localStorage');
+            return { 
+                configs: configs, 
+                source: 'local',
+                isEmpty: false
+            };
+        }
+    }
+}
+
+/**
  * 配置文件生成器
  * 用于从保存的测试配置生成部署配置文件
  */
 
 class ConfigFileGenerator {
     constructor() {
+        // 服务器数据管理器
+        this.serverDataManager = new ConfigServerDataManager();
+        
         this.selectedConfig = null; // 当前选择的配置
         this.savedConfigs = []; // 保存的配置列表
         this.filteredConfigs = []; // 过滤后的配置列表
@@ -91,16 +138,34 @@ class ConfigFileGenerator {
         ];
         
         const missingElements = [];
+        const foundElements = [];
+        
+        console.log('🔍 检查DOM元素是否存在...');
+        
         requiredElements.forEach(elementName => {
             if (!this.elements[elementName]) {
                 missingElements.push(elementName);
+                console.error(`❌ 缺少元素: ${elementName}`);
+            } else {
+                foundElements.push(elementName);
+                console.log(`✅ 找到元素: ${elementName}`);
             }
         });
         
+        console.log(`📊 元素检查结果: ${foundElements.length}个存在, ${missingElements.length}个缺失`);
+        
         if (missingElements.length > 0) {
-            console.warn('配置生成器缺少以下关键元素:', missingElements);
-            console.warn('某些功能可能无法正常工作');
+            console.warn('⚠️ 配置生成器缺少以下关键元素:', missingElements);
+            console.warn('⚠️ 某些功能可能无法正常工作');
         }
+        
+        // 额外检查所有elements
+        console.log('🔍 检查所有elements对象...');
+        Object.keys(this.elements).forEach(key => {
+            if (!this.elements[key]) {
+                console.warn(`⚠️ Element ${key} 为null或未找到`);
+            }
+        });
     }
     
     async init() {
@@ -124,19 +189,29 @@ class ConfigFileGenerator {
         // 初始化自定义文件输入验证
         this.validateCustomFileInput();
         
+        // 清理可能存在的数据来源指示器
+        this.removeDataSourceIndicator();
+        
         console.log('配置文件生成器初始化完成');
     }
     
     async loadSavedConfigs() {
         try {
-            // 从localStorage读取保存的配置
-            const configsData = localStorage.getItem('testConfigs');
-            if (configsData) {
-                this.savedConfigs = JSON.parse(configsData);
-                console.log(`加载了 ${this.savedConfigs.length} 个保存的配置`);
+            console.log('🔄 开始加载配置...');
+            
+            // 使用ServerDataManager进行双源读取（服务器优先，本地备用）
+            const result = await this.serverDataManager.loadConfigs();
+            this.savedConfigs = result.configs;
+            this.dataSource = result.source;
+            
+            if (this.savedConfigs.length > 0) {
+                const sourceText = result.source === 'server' ? '服务器' : '本地缓存';
+                console.log(`✅ 成功从${sourceText}加载了 ${this.savedConfigs.length} 个保存的配置`);
+                this.showNotification(`已从${sourceText}加载 ${this.savedConfigs.length} 个配置`, 'success');
             } else {
-                this.savedConfigs = [];
-                console.log('没有找到保存的配置');
+                const sourceText = result.source === 'server' ? '服务器和本地' : '本地';
+                console.log(`📝 ${sourceText}都没有找到保存的配置`);
+                this.showNotification('暂无保存的配置，请先在主页面创建一些测试配置', 'info');
             }
             
             // 更新界面
@@ -144,9 +219,10 @@ class ConfigFileGenerator {
             this.updateStats();
             
         } catch (error) {
-            console.error('加载配置失败:', error);
-            this.showNotification('加载配置失败', 'error');
+            console.error('❌ 加载配置失败:', error);
+            this.showNotification('加载配置失败，请检查网络连接', 'error');
             this.savedConfigs = [];
+            this.dataSource = 'unknown';
         }
     }
     
@@ -401,8 +477,16 @@ class ConfigFileGenerator {
         }
         
         if (this.elements.refreshConfigs) {
-            this.elements.refreshConfigs.addEventListener('click', () => {
-                this.loadSavedConfigs();
+            this.elements.refreshConfigs.addEventListener('click', async () => {
+                // 显示刷新中状态
+                this.elements.refreshConfigs.disabled = true;
+                this.elements.refreshConfigs.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+                
+                await this.loadSavedConfigs();
+                
+                // 恢复按钮状态
+                this.elements.refreshConfigs.disabled = false;
+                this.elements.refreshConfigs.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
             });
         }
         
@@ -525,13 +609,17 @@ class ConfigFileGenerator {
     
     generateArgsFromConfig() {
         if (!this.selectedConfig) {
-            this.elements.argsPreview.innerHTML = `
-                <div class="args-placeholder">
-                    <i class="fas fa-magic"></i>
-                    <p>Arguments will be auto-generated from selected configuration</p>
-                </div>
-            `;
-            this.elements.argsCount.textContent = '0';
+            if (this.elements.argsPreview) {
+                this.elements.argsPreview.innerHTML = `
+                    <div class="args-placeholder">
+                        <i class="fas fa-magic"></i>
+                        <p>Arguments will be auto-generated from selected configuration</p>
+                    </div>
+                `;
+            }
+            if (this.elements.argsCount) {
+                this.elements.argsCount.textContent = '0';
+            }
             return;
         }
         
@@ -544,7 +632,9 @@ class ConfigFileGenerator {
         });
         
         // 更新界面
-        this.elements.argsCount.textContent = args.length.toString();
+        if (this.elements.argsCount) {
+            this.elements.argsCount.textContent = args.length.toString();
+        }
         
         if (args.length > 0) {
             let html = '<div class="args-list">';
@@ -552,14 +642,18 @@ class ConfigFileGenerator {
                 html += `<div class="args-item">${this.escapeHtml(arg)}</div>`;
             });
             html += '</div>';
-            this.elements.argsPreview.innerHTML = html;
+            if (this.elements.argsPreview) {
+                this.elements.argsPreview.innerHTML = html;
+            }
         } else {
-            this.elements.argsPreview.innerHTML = `
-                <div class="args-placeholder">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <p>No test selections found in this configuration</p>
-                </div>
-            `;
+            if (this.elements.argsPreview) {
+                this.elements.argsPreview.innerHTML = `
+                    <div class="args-placeholder">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p>No test selections found in this configuration</p>
+                    </div>
+                `;
+            }
         }
     }
     
@@ -812,12 +906,22 @@ class ConfigFileGenerator {
         const fileSize = new Blob([content]).size;
         const timestamp = new Date().toLocaleString();
         
-        this.elements.resultFileName.textContent = fileName;
-        this.elements.resultLocation.textContent = locationText;
-        this.elements.resultFileSize.textContent = this.formatFileSize(fileSize);
-        this.elements.resultTimestamp.textContent = timestamp;
+        if (this.elements.resultFileName) {
+            this.elements.resultFileName.textContent = fileName;
+        }
+        if (this.elements.resultLocation) {
+            this.elements.resultLocation.textContent = locationText;
+        }
+        if (this.elements.resultFileSize) {
+            this.elements.resultFileSize.textContent = this.formatFileSize(fileSize);
+        }
+        if (this.elements.resultTimestamp) {
+            this.elements.resultTimestamp.textContent = timestamp;
+        }
         
-        this.elements.generateResultModal.style.display = 'flex';
+        if (this.elements.generateResultModal) {
+            this.elements.generateResultModal.style.display = 'flex';
+        }
         
         // 存储当前生成的信息用于重新下载
         this.lastGenerated = {
@@ -828,7 +932,9 @@ class ConfigFileGenerator {
     }
     
     closeResultModal() {
-        this.elements.generateResultModal.style.display = 'none';
+        if (this.elements.generateResultModal) {
+            this.elements.generateResultModal.style.display = 'none';
+        }
     }
     
     downloadAgain() {
@@ -1408,12 +1514,63 @@ class ConfigFileGenerator {
         this.updateFileSelection();
         
         this.showNotification(`Added custom file: ${fileName}`, 'success');
-        console.log(`自定义文件已添加完成: ${fileName}`, this.selectedFiles);
+                console.log(`自定义文件已添加完成: ${fileName}`, this.selectedFiles);
     }
+    
+    // 移除数据来源指示器
+    removeDataSourceIndicator() {
+        const indicator = document.querySelector('.data-source-indicator');
+        if (indicator && indicator.parentNode) {
+            indicator.parentNode.removeChild(indicator);
+            console.log('🗑️ 已移除数据来源指示器');
+        }
+    }
+ 
 }
+
+// 全局错误处理
+window.addEventListener('error', (event) => {
+    console.error('🚨 Global JavaScript Error:', event.error);
+    console.error('File:', event.filename, 'Line:', event.lineno);
+    return false; // 不阻止默认错误处理
+});
 
 // 页面加载完成后初始化生成器
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM内容已加载，初始化配置生成器...');
-    window.configGenerator = new ConfigFileGenerator();
+    try {
+        window.configGenerator = new ConfigFileGenerator();
+        console.log('✅ 配置文件生成器初始化成功');
+    } catch (error) {
+        console.error('❌ 配置文件生成器初始化失败:', error);
+        
+        // 显示用户友好的错误信息
+        const errorDiv = document.createElement('div');
+        errorDiv.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px 20px;
+            border: 1px solid #f5c6cb;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            z-index: 10000;
+            max-width: 400px;
+        `;
+        errorDiv.innerHTML = `
+            <strong>⚠️ 初始化失败</strong><br>
+            配置文件生成器初始化时出现错误，请刷新页面重试。<br>
+            <small>错误详情请查看浏览器控制台</small>
+        `;
+        document.body.appendChild(errorDiv);
+        
+        // 5秒后自动移除错误提示
+        setTimeout(() => {
+            if (errorDiv.parentNode) {
+                errorDiv.parentNode.removeChild(errorDiv);
+            }
+        }, 5000);
+    }
 }); 
