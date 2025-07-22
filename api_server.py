@@ -1,0 +1,369 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+测试标签选择器 - Python API服务器
+提供数据存储和配置管理服务（共享数据模式）
+"""
+
+import json
+import os
+import logging
+from datetime import datetime
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import traceback
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('api_server.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+app = Flask(__name__)
+CORS(app)  # 允许跨域请求
+
+# 数据目录配置
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
+CURRENT_DATA_FILE = os.path.join(DATA_DIR, 'current_data.json')
+CONFIGS_FILE = os.path.join(DATA_DIR, 'configs.json')
+
+def ensure_data_directory():
+    """确保数据目录存在"""
+    if not os.path.exists(DATA_DIR):
+        os.makedirs(DATA_DIR)
+        logger.info(f"📁 创建数据目录: {DATA_DIR}")
+
+def load_json_file(file_path, default_value=None):
+    """安全加载JSON文件"""
+    try:
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                logger.info(f"✅ 成功加载文件: {file_path}")
+                return data
+        else:
+            logger.info(f"📝 文件不存在，返回默认值: {file_path}")
+            return default_value
+    except Exception as e:
+        logger.error(f"❌ 加载文件失败 {file_path}: {str(e)}")
+        return default_value
+
+def save_json_file(file_path, data):
+    """安全保存JSON文件"""
+    try:
+        ensure_data_directory()
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        logger.info(f"✅ 成功保存文件: {file_path}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ 保存文件失败 {file_path}: {str(e)}")
+        return False
+
+@app.route('/jenkins/109/api/saveCurrentData', methods=['POST'])
+def save_current_data():
+    """保存当前解析的数据"""
+    try:
+        request_data = request.get_json()
+        
+        if not request_data or 'data' not in request_data:
+            return jsonify({'error': '缺少数据字段'}), 400
+        
+        data = request_data['data']
+        
+        # 添加元数据
+        save_data = {
+            'data': data,
+            'savedAt': datetime.now().isoformat(),
+            'version': '1.0'
+        }
+        
+        success = save_json_file(CURRENT_DATA_FILE, save_data)
+        
+        if success:
+            logger.info(f"💾 已保存当前数据，功能组数: {len(data.get('featureGroups', []))}")
+            return jsonify({
+                'success': True,
+                'message': '数据保存成功',
+                'savedAt': save_data['savedAt']
+            })
+        else:
+            return jsonify({'error': '保存数据失败'}), 500
+            
+    except Exception as e:
+        logger.error(f"❌ 保存当前数据异常: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': f'服务器错误: {str(e)}'}), 500
+
+@app.route('/jenkins/109/api/loadCurrentData', methods=['GET'])
+def load_current_data():
+    """加载当前解析的数据"""
+    try:
+        saved_data = load_json_file(CURRENT_DATA_FILE)
+        
+        if saved_data is None:
+            logger.info("📝 没有找到保存的当前数据")
+            return jsonify({'error': '没有保存的数据'}), 404
+        
+        # 提取实际数据
+        data = saved_data.get('data', {})
+        logger.info(f"✅ 加载当前数据成功，功能组数: {len(data.get('featureGroups', []))}")
+        
+        return jsonify({
+            'success': True,
+            'data': data,
+            'savedAt': saved_data.get('savedAt'),
+            'version': saved_data.get('version', '1.0')
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ 加载当前数据异常: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': f'服务器错误: {str(e)}'}), 500
+
+@app.route('/jenkins/109/api/clearCurrentData', methods=['DELETE'])
+def clear_current_data():
+    """清除当前数据"""
+    try:
+        if os.path.exists(CURRENT_DATA_FILE):
+            os.remove(CURRENT_DATA_FILE)
+            logger.info("🗑️ 已删除当前数据文件")
+        else:
+            logger.info("📝 当前数据文件不存在，无需删除")
+        
+        return jsonify({
+            'success': True,
+            'message': '数据清除成功'
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ 清除当前数据异常: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': f'服务器错误: {str(e)}'}), 500
+
+@app.route('/jenkins/109/api/checkData', methods=['GET'])
+def check_data():
+    """检查是否有保存的数据"""
+    try:
+        exists = os.path.exists(CURRENT_DATA_FILE)
+        logger.info(f"🔍 检查数据存在性: {exists}")
+        
+        return jsonify({
+            'success': True,
+            'exists': exists
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ 检查数据异常: {str(e)}")
+        return jsonify({'error': f'服务器错误: {str(e)}'}), 500
+
+@app.route('/jenkins/109/api/getDataInfo', methods=['GET'])
+def get_data_info():
+    """获取数据统计信息"""
+    try:
+        saved_data = load_json_file(CURRENT_DATA_FILE)
+        
+        if saved_data is None:
+            return jsonify({'error': '没有保存的数据'}), 404
+        
+        data = saved_data.get('data', {})
+        group_count = len(data.get('featureGroups', []))
+        
+        # 计算feature数量
+        feature_count = 0
+        sub_feature_count = 0
+        for group in data.get('featureGroups', []):
+            features = group.get('features', [])
+            feature_count += len(features)
+            for feature in features:
+                sub_features = feature.get('subFeatures', [])
+                sub_feature_count += len(sub_features)
+        
+        info = {
+            'source': data.get('source', '未知来源'),
+            'savedAt': saved_data.get('savedAt'),
+            'groupCount': group_count,
+            'featureCount': feature_count,
+            'subFeatureCount': sub_feature_count,
+            'testLevels': data.get('testLevels', []),
+            'version': saved_data.get('version', '1.0')
+        }
+        
+        logger.info(f"📊 返回数据信息: {group_count}组, {feature_count}功能, {sub_feature_count}子功能")
+        
+        return jsonify({
+            'success': True,
+            'info': info
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ 获取数据信息异常: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': f'服务器错误: {str(e)}'}), 500
+
+@app.route('/jenkins/109/api/saveConfigs', methods=['POST'])
+def save_configs():
+    """保存配置列表"""
+    try:
+        request_data = request.get_json()
+        
+        if not request_data or 'configs' not in request_data:
+            return jsonify({'error': '缺少配置字段'}), 400
+        
+        configs = request_data['configs']
+        
+        # 添加元数据
+        save_data = {
+            'configs': configs,
+            'savedAt': datetime.now().isoformat(),
+            'version': '1.0'
+        }
+        
+        success = save_json_file(CONFIGS_FILE, save_data)
+        
+        if success:
+            logger.info(f"💾 已保存配置，配置数量: {len(configs)}")
+            return jsonify({
+                'success': True,
+                'message': '配置保存成功',
+                'savedAt': save_data['savedAt']
+            })
+        else:
+            return jsonify({'error': '保存配置失败'}), 500
+            
+    except Exception as e:
+        logger.error(f"❌ 保存配置异常: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': f'服务器错误: {str(e)}'}), 500
+
+@app.route('/jenkins/109/api/loadConfigs', methods=['GET'])
+def load_configs():
+    """加载配置列表"""
+    try:
+        saved_data = load_json_file(CONFIGS_FILE)
+        
+        if saved_data is None:
+            logger.info("📝 没有找到保存的配置")
+            return jsonify({
+                'success': True,
+                'configs': [],
+                'savedAt': None
+            })
+        
+        configs = saved_data.get('configs', [])
+        logger.info(f"✅ 加载配置成功，配置数量: {len(configs)}")
+        
+        return jsonify({
+            'success': True,
+            'configs': configs,
+            'savedAt': saved_data.get('savedAt'),
+            'version': saved_data.get('version', '1.0')
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ 加载配置异常: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': f'服务器错误: {str(e)}'}), 500
+
+@app.route('/jenkins/109/api/status', methods=['GET'])
+def api_status():
+    """API状态检查"""
+    try:
+        current_data_exists = os.path.exists(CURRENT_DATA_FILE)
+        configs_exists = os.path.exists(CONFIGS_FILE)
+        
+        status_info = {
+            'status': 'healthy',
+            'timestamp': datetime.now().isoformat(),
+            'dataDirectory': DATA_DIR,
+            'currentDataExists': current_data_exists,
+            'configsExists': configs_exists,
+            'version': '1.0'
+        }
+        
+        return jsonify(status_info)
+        
+    except Exception as e:
+        logger.error(f"❌ 状态检查异常: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/jenkins/109/api/backup', methods=['POST'])
+def backup_data():
+    """备份数据（管理员功能）"""
+    try:
+        backup_dir = os.path.join(DATA_DIR, 'backups')
+        if not os.path.exists(backup_dir):
+            os.makedirs(backup_dir)
+        
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+        # 备份当前数据
+        backup_files = []
+        if os.path.exists(CURRENT_DATA_FILE):
+            backup_current = os.path.join(backup_dir, f'current_data_{timestamp}.json')
+            os.system(f'cp "{CURRENT_DATA_FILE}" "{backup_current}"')
+            backup_files.append(backup_current)
+        
+        # 备份配置
+        if os.path.exists(CONFIGS_FILE):
+            backup_configs = os.path.join(backup_dir, f'configs_{timestamp}.json')
+            os.system(f'cp "{CONFIGS_FILE}" "{backup_configs}"')
+            backup_files.append(backup_configs)
+        
+        logger.info(f"💾 数据备份完成: {backup_files}")
+        
+        return jsonify({
+            'success': True,
+            'message': '备份完成',
+            'backupFiles': backup_files,
+            'timestamp': timestamp
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ 备份异常: {str(e)}")
+        return jsonify({'error': f'备份失败: {str(e)}'}), 500
+
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({'error': 'API端点不存在'}), 404
+
+@app.errorhandler(405)
+def method_not_allowed(error):
+    return jsonify({'error': '请求方法不允许'}), 405
+
+@app.errorhandler(500)
+def internal_error(error):
+    logger.error(f"❌ 内部服务器错误: {str(error)}")
+    return jsonify({'error': '内部服务器错误'}), 500
+
+if __name__ == '__main__':
+    # 确保数据目录存在
+    ensure_data_directory()
+    
+    # 启动信息
+    logger.info("🚀 测试标签选择器 API 服务器启动中...")
+    logger.info(f"📁 数据目录: {DATA_DIR}")
+    logger.info(f"📄 当前数据文件: {CURRENT_DATA_FILE}")
+    logger.info(f"⚙️ 配置文件: {CONFIGS_FILE}")
+    logger.info("🌐 服务器配置：")
+    logger.info("   - 监听地址: 0.0.0.0:5000 (所有接口)")
+    logger.info("   - 前端地址: http://10.91.90.109:8080/jenkins//109/tools/web/tagSelecter.html")
+    logger.info("   - API地址: http://10.91.90.109:5000/jenkins/109/api/")
+    logger.info("   - 状态检查: http://10.91.90.109:5000/jenkins/109/api/status")
+    
+    # 启动Flask应用
+    app.run(
+        host='0.0.0.0',  # 监听所有接口，允许从任何地址访问
+        port=5000,       # 端口号5000
+        debug=False,     # 生产环境关闭调试模式
+        threaded=True    # 支持多线程
+    ) 
