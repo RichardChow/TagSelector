@@ -522,7 +522,7 @@ class ConfigFileGenerator {
                     await this.generateConfigurationFile();
                 } catch (error) {
                     console.error('❌ 生成配置文件失败:', error);
-                    this.showNotification(`生成配置文件失败: ${error.message}`, 'error');
+                    this.showNotification(`Failed to generate configuration file: ${error.message}`, 'error');
                 } finally {
                     // 恢复按钮状态
                     this.elements.generateFile.disabled = false;
@@ -898,7 +898,7 @@ class ConfigFileGenerator {
         // 清理URL对象
         setTimeout(() => URL.revokeObjectURL(url), 1000);
         
-        this.showNotification(`文件已下载: ${fileName}`, 'success');
+        this.showNotification(`File downloaded: ${fileName}`, 'success');
     }
     
     async saveToServer(content, fileName) {
@@ -907,23 +907,18 @@ class ConfigFileGenerator {
             
             console.log('✅ 文件保存成功:', result);
             
-            let message = `文件已保存: ${result.fileName}`;
-            if (result.warning) {
-                message += `\n⚠️ ${result.warning}`;
-                this.showNotification(message, 'warning');
-            } else {
-                this.showNotification(message, 'success');
-            }
+            let message = `File saved: ${result.fileName}`;
+            this.showNotification(message, 'success');
             
             // 显示详细的保存结果
             this.showServerSaveResult(result);
             
         } catch (error) {
             console.error('❌ 保存到服务器失败:', error);
-            this.showNotification(`保存到服务器失败: ${error.message}`, 'error');
+            this.showNotification(`Failed to save to server: ${error.message}`, 'error');
             
             // 询问用户是否要下载到本地作为备选方案
-            if (confirm('保存到服务器失败，是否要下载到本地作为备选方案？')) {
+            if (confirm('Failed to save to server. Would you like to download the file locally instead?')) {
                 this.downloadToLocal(content, fileName);
             }
         }
@@ -1004,7 +999,7 @@ class ConfigFileGenerator {
                 }
             } catch (error) {
                 console.error('❌ 重新生成文件失败:', error);
-                this.showNotification(`重新生成文件失败: ${error.message}`, 'error');
+                this.showNotification(`Failed to regenerate file: ${error.message}`, 'error');
             }
         }
     }
@@ -1328,7 +1323,7 @@ class ConfigFileGenerator {
         const saveLocation = document.querySelector('input[name="saveLocation"]:checked').value;
         
         // 显示进度提示
-        this.showNotification(`开始生成 ${this.selectedFiles.length} 个配置文件...`, 'info');
+        this.showNotification(`Generating ${this.selectedFiles.length} configuration file${this.selectedFiles.length > 1 ? 's' : ''}...`, 'info');
         
         try {
             for (const fileName of this.selectedFiles) {
@@ -1343,7 +1338,7 @@ class ConfigFileGenerator {
                         fileName: finalFileName,
                         success: true,
                         location: 'local',
-                        message: '本地下载成功',
+                        message: 'Downloaded successfully',
                         fileSize: content.length
                     });
                 } else {
@@ -1352,8 +1347,8 @@ class ConfigFileGenerator {
                         saveResults.push({
                             fileName: finalFileName,
                             success: true,
-                            location: result.location || '服务器',
-                            message: result.message || '保存成功',
+                            location: result.location || 'server',
+                            message: result.message || 'Saved successfully',
                             fileSize: result.fileSize || content.length,
                             filePath: result.filePath,
                             savedAt: result.savedAt,
@@ -1364,7 +1359,7 @@ class ConfigFileGenerator {
                             fileName: finalFileName,
                             success: false,
                             location: 'server',
-                            message: error.message || '保存失败',
+                            message: error.message || 'Save failed',
                             error: true
                         });
                     }
@@ -1376,7 +1371,7 @@ class ConfigFileGenerator {
             
         } catch (error) {
             console.error('❌ 批量生成文件时出错:', error);
-            this.showNotification(`批量生成文件失败: ${error.message}`, 'error');
+            this.showNotification(`Batch generation failed: ${error.message}`, 'error');
         }
     }
     
@@ -1610,43 +1605,23 @@ class ConfigFileGenerator {
     
     // 显示服务器保存结果的详细信息
     showServerSaveResult(result) {
-        this.showModal('文件保存成功', `
+        this.showModal('File Saved Successfully', `
             <div style="margin-bottom: 12px;">
-                <strong>文件名:</strong> ${result.fileName}
+                <strong>File:</strong> ${result.fileName}
             </div>
             
             <div style="margin-bottom: 12px;">
-                <strong>保存位置:</strong><br>
-                <code style="
-                    background: #f8f9fa;
-                    padding: 4px 8px;
-                    border-radius: 4px;
-                    font-size: 0.85rem;
-                    word-break: break-all;
-                ">${result.location}</code>
-            </div>
-            
-            <div style="margin-bottom: 12px;">
-                <strong>文件大小:</strong> ${this.formatFileSize(result.fileSize)}
+                <strong>Size:</strong> ${this.formatFileSize(result.fileSize)}
             </div>
             
             <div style="margin-bottom: 16px;">
-                <strong>保存时间:</strong> ${new Date(result.savedAt).toLocaleString()}
+                <strong>Saved at:</strong> ${new Date(result.savedAt).toLocaleString()}
             </div>
             
-            ${result.warning ? `
-                <div style="
-                    background: #fff3cd;
-                    color: #856404;
-                    padding: 12px;
-                    border-radius: 6px;
-                    border-left: 4px solid #ffc107;
-                    margin-bottom: 16px;
-                ">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <strong>注意:</strong> ${result.warning}
-                </div>
-            ` : ''}
+            <div style="text-align: center; color: #28a745;">
+                <i class="fas fa-check-circle" style="font-size: 2rem; margin-bottom: 8px;"></i>
+                <div>Configuration file generated successfully!</div>
+            </div>
         `, 'success');
     }
 
@@ -1656,7 +1631,7 @@ class ConfigFileGenerator {
         const failCount = saveResults.filter(r => !r.success).length;
         const totalCount = saveResults.length;
         
-        const locationText = saveLocation === 'local' ? '本地下载' : '服务器保存';
+        const locationText = saveLocation === 'local' ? 'downloaded' : 'saved';
         
         // 构建结果列表
         const resultsList = saveResults.map(result => {
@@ -1664,9 +1639,14 @@ class ConfigFileGenerator {
                 '<i class="fas fa-check-circle" style="color: #28a745;"></i>' :
                 '<i class="fas fa-times-circle" style="color: #dc3545;"></i>';
             
-            const statusClass = result.success ? 'success' : 'error';
-            const warningIcon = result.warning ? 
-                '<i class="fas fa-exclamation-triangle" style="color: #ffc107; margin-left: 8px;" title="有警告"></i>' : '';
+            // 简化消息显示，去掉技术细节
+            let message = result.success ? 'Success' : 'Failed';
+            if (result.success && result.fileSize) {
+                message += ` (${this.formatFileSize(result.fileSize)})`;
+            }
+            if (!result.success && result.message && !result.message.includes('sudo')) {
+                message = result.message;
+            }
             
             return `
                 <div style="
@@ -1683,14 +1663,22 @@ class ConfigFileGenerator {
                     <div style="flex: 1;">
                         <div style="font-weight: 500;">${result.fileName}</div>
                         <div style="font-size: 0.85rem; color: #666;">
-                            ${result.message}
-                            ${result.fileSize ? ` (${this.formatFileSize(result.fileSize)})` : ''}
+                            ${message}
                         </div>
                     </div>
-                    ${warningIcon}
                 </div>
             `;
         }).join('');
+        
+        // 根据结果显示不同的标题
+        let title = '';
+        if (failCount === 0) {
+            title = totalCount === 1 ? 'File Generated Successfully' : 'Files Generated Successfully';
+        } else if (successCount === 0) {
+            title = 'Generation Failed';
+        } else {
+            title = 'Generation Completed';
+        }
         
         const modalContent = `
             <div style="margin-bottom: 16px; text-align: center;">
@@ -1705,7 +1693,7 @@ class ConfigFileGenerator {
                     font-weight: 500;
                 ">
                     <i class="fas fa-${failCount > 0 ? 'exclamation-triangle' : 'check-circle'}"></i>
-                    ${successCount}/${totalCount} 个文件${locationText}成功
+                    ${successCount}/${totalCount} files ${locationText} successfully
                 </div>
             </div>
             
@@ -1730,12 +1718,12 @@ class ConfigFileGenerator {
                     border-left: 4px solid #dc3545;
                 ">
                     <i class="fas fa-info-circle"></i>
-                    <strong>提示:</strong> 失败的文件可以尝试重新生成或选择本地下载
+                    <strong>Tip:</strong> Failed files can be regenerated or downloaded locally
                 </div>
             ` : ''}
         `;
         
-        this.showModal(`批量${locationText}结果`, modalContent, failCount > 0 ? 'warning' : 'success');
+        this.showModal(title, modalContent, failCount > 0 ? 'warning' : 'success');
     }
 
     // 通用模态框显示方法
@@ -1759,6 +1747,7 @@ class ConfigFileGenerator {
         
         const modalId = 'custom-modal-' + Date.now();
         const backdropId = 'custom-backdrop-' + Date.now();
+        const btnId = 'modal-confirm-btn-' + Date.now();
         
         const modalHtml = `
             <div id="${backdropId}" style="
@@ -1802,7 +1791,7 @@ class ConfigFileGenerator {
                     </div>
                     
                     <div style="text-align: center;">
-                        <button onclick="this.removeModal('${backdropId}')" style="
+                        <button id="${btnId}" style="
                             background: var(--primary-color);
                             color: white;
                             border: none;
@@ -1811,13 +1800,18 @@ class ConfigFileGenerator {
                             cursor: pointer;
                             font-size: 0.9rem;
                             font-weight: 500;
-                        ">确定</button>
+                        ">OK</button>
                     </div>
                 </div>
             </div>
         `;
         
         document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // 添加确认按钮点击事件
+        document.getElementById(btnId).addEventListener('click', () => {
+            this.removeModal(backdropId);
+        });
         
         // 添加点击背景关闭功能
         document.getElementById(backdropId).addEventListener('click', (e) => {
@@ -1834,9 +1828,6 @@ class ConfigFileGenerator {
             }
         };
         document.addEventListener('keydown', escHandler);
-        
-        // 添加全局方法供按钮调用
-        window.removeModal = window.removeModal || ((id) => this.removeModal(id));
     }
 
     // 移除模态框
