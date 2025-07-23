@@ -562,9 +562,9 @@
 
 /* 表单组样式 */
 .form-group {
-    margin-bottom: 16px;
-    padding: 16px;
-    border-radius: 10px;
+    margin-bottom: 12px;
+    padding: 12px 14px;
+    border-radius: 8px;
     border: 1px solid #e9ecef;
     transition: all 0.3s ease;
 }
@@ -592,10 +592,10 @@
 .form-group label {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     font-weight: 600;
     color: var(--secondary-color);
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     font-size: 0.85rem;
 }
 
@@ -666,8 +666,8 @@
     background: #f8f9fa;
     border: 2px dashed #dee2e6;
     border-radius: 6px;
-    padding: 12px;
-    min-height: 60px;
+    padding: 10px;
+    min-height: 50px;
 }
 
 .args-placeholder {
@@ -939,7 +939,7 @@
 
 /* 环境文件选择器 */
 .environment-section {
-    margin-bottom: 16px;
+    margin-bottom: 12px;
 }
 
 .environment-selector {
@@ -1247,8 +1247,8 @@
 
 /* 选择摘要 */
 .selection-summary {
-    margin-top: 10px;
-    padding: 10px;
+    margin-top: 8px;
+    padding: 8px;
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     border-radius: 6px;
     border: 1px solid #e9ecef;
@@ -1348,7 +1348,7 @@
 /* 生成按钮区域 */
 .generate-section {
     margin-top: auto;
-    padding-top: 16px;
+    padding-top: 12px;
     border-top: 1px solid #e9ecef;
 }
 
