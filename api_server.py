@@ -379,22 +379,41 @@ def save_file():
             file_path = os.path.join(server_path, file_name)
             location_info = f"服务器路径: {server_path}"
         
+        # 检查文件是否存在，如果存在则自动重命名
+        final_file_name = file_name
+        final_file_path = file_path
+        counter = 1
+        
+        while os.path.exists(final_file_path):
+            # 提取文件名（不含扩展名）和扩展名
+            name_without_ext = file_name.rsplit('.', 1)[0] if '.' in file_name else file_name
+            extension = '.' + file_name.rsplit('.', 1)[1] if '.' in file_name else ''
+            
+            # 生成新文件名
+            final_file_name = f"{name_without_ext}({counter}){extension}"
+            final_file_path = os.path.join(os.path.dirname(file_path), final_file_name)
+            counter += 1
+            
+            logger.info(f"📝 文件已存在，尝试新文件名: {final_file_name}")
+        
         # 保存文件
         try:
             # 尝试直接写入
-            with open(file_path, 'w', encoding='utf-8') as f:
+            with open(final_file_path, 'w', encoding='utf-8') as f:
                 f.write(content)
             
-            logger.info(f"📁 配置文件已保存: {file_path}")
+            logger.info(f"📁 配置文件已保存: {final_file_path}")
             
             return jsonify({
                 'success': True,
                 'message': '文件保存成功',
-                'fileName': file_name,
-                'filePath': file_path,
+                'fileName': final_file_name,  # 返回实际保存的文件名
+                'originalFileName': file_name,  # 返回原始请求的文件名
+                'filePath': final_file_path,
                 'location': location_info,
                 'savedAt': datetime.now().isoformat(),
-                'fileSize': len(content.encode('utf-8'))
+                'fileSize': len(content.encode('utf-8')),
+                'renamed': final_file_name != file_name  # 标识是否被重命名
             })
             
         except PermissionError:
@@ -409,22 +428,24 @@ def save_file():
                     
                     # 使用sudo cp命令复制文件
                     result = subprocess.run([
-                        'sudo', 'cp', temp_path, file_path
+                        'sudo', 'cp', temp_path, final_file_path
                     ], capture_output=True, text=True, timeout=30)
                     
                     # 清理临时文件
                     os.unlink(temp_path)
                     
                     if result.returncode == 0:
-                        logger.info(f"📁 使用sudo权限保存文件成功: {file_path}")
+                        logger.info(f"📁 使用sudo权限保存文件成功: {final_file_path}")
                         return jsonify({
                             'success': True,
-                            'message': '文件保存成功 (使用sudo权限)',
-                            'fileName': file_name,
-                            'filePath': file_path,
+                            'message': '文件保存成功',
+                            'fileName': final_file_name,
+                            'originalFileName': file_name,
+                            'filePath': final_file_path,
                             'location': location_info,
                             'savedAt': datetime.now().isoformat(),
                             'fileSize': len(content.encode('utf-8')),
+                            'renamed': final_file_name != file_name,
                             'method': 'sudo'
                         })
                     else:
@@ -442,7 +463,19 @@ def save_file():
             if not os.path.exists(local_backup_path):
                 os.makedirs(local_backup_path)
             
-            backup_file_path = os.path.join(local_backup_path, file_name)
+            # 检查本地备份路径中的文件是否存在，如果存在则重命名
+            backup_final_file_name = file_name
+            backup_file_path = os.path.join(local_backup_path, backup_final_file_name)
+            backup_counter = 1
+            
+            while os.path.exists(backup_file_path):
+                name_without_ext = file_name.rsplit('.', 1)[0] if '.' in file_name else file_name
+                extension = '.' + file_name.rsplit('.', 1)[1] if '.' in file_name else ''
+                backup_final_file_name = f"{name_without_ext}({backup_counter}){extension}"
+                backup_file_path = os.path.join(local_backup_path, backup_final_file_name)
+                backup_counter += 1
+                logger.info(f"📝 本地备份文件已存在，尝试新文件名: {backup_final_file_name}")
+            
             with open(backup_file_path, 'w', encoding='utf-8') as f:
                 f.write(content)
             
@@ -451,11 +484,13 @@ def save_file():
             return jsonify({
                 'success': True,
                 'message': '文件已保存到本地备份路径 (权限不足)',
-                'fileName': file_name,
+                'fileName': backup_final_file_name,
+                'originalFileName': file_name,
                 'filePath': backup_file_path,
                 'location': f"本地备份路径: {local_backup_path}",
                 'savedAt': datetime.now().isoformat(),
                 'fileSize': len(content.encode('utf-8')),
+                'renamed': backup_final_file_name != file_name,
                 'warning': '原路径权限不足，已保存到本地备份'
             })
             

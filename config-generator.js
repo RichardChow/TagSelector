@@ -1328,35 +1328,42 @@ class ConfigFileGenerator {
         try {
             for (const fileName of this.selectedFiles) {
                 const content = this.generateYAMLContentForFile(fileName);
-                const finalFileName = this.resolveDuplicateFileName(fileName, generatedFiles);
-                generatedFiles.push(finalFileName);
                 
                 // 根据保存位置选择
                 if (saveLocation === 'local') {
+                    // 本地下载仍然需要前端处理重命名
+                    const finalFileName = this.resolveDuplicateFileName(fileName, generatedFiles);
+                    generatedFiles.push(finalFileName);
+                    
                     this.downloadToLocal(content, finalFileName);
                     saveResults.push({
                         fileName: finalFileName,
+                        originalFileName: fileName,
                         success: true,
                         location: 'local',
                         message: 'Downloaded successfully',
-                        fileSize: content.length
+                        fileSize: content.length,
+                        renamed: finalFileName !== fileName
                     });
                 } else {
+                    // 服务器保存让后端处理重命名
                     try {
-                        const result = await this.saveToServerSilent(content, finalFileName);
+                        const result = await this.saveToServerSilent(content, fileName);
                         saveResults.push({
-                            fileName: finalFileName,
+                            fileName: result.fileName || fileName,  // 使用服务器返回的实际文件名
+                            originalFileName: fileName,  // 原始请求的文件名
                             success: true,
                             location: result.location || 'server',
                             message: result.message || 'Saved successfully',
                             fileSize: result.fileSize || content.length,
                             filePath: result.filePath,
                             savedAt: result.savedAt,
-                            warning: result.warning
+                            warning: result.warning,
+                            renamed: result.renamed || false  // 是否被重命名
                         });
                     } catch (error) {
                         saveResults.push({
-                            fileName: finalFileName,
+                            fileName: fileName,
                             success: false,
                             location: 'server',
                             message: error.message || 'Save failed',
@@ -1605,10 +1612,27 @@ class ConfigFileGenerator {
     
     // 显示服务器保存结果的详细信息
     showServerSaveResult(result) {
+        let fileDisplayText = result.fileName;
+        let renameInfo = '';
+        
+        if (result.renamed && result.originalFileName) {
+            fileDisplayText = `${result.originalFileName} → ${result.fileName}`;
+            renameInfo = `
+                <div style="margin-bottom: 12px; padding: 8px; background: #fff3cd; border-radius: 4px; border-left: 3px solid #ffc107;">
+                    <small style="color: #856404;">
+                        <i class="fas fa-info-circle"></i> 
+                        File was automatically renamed to avoid conflict
+                    </small>
+                </div>
+            `;
+        }
+        
         this.showModal('File Saved Successfully', `
             <div style="margin-bottom: 12px;">
-                <strong>File:</strong> ${result.fileName}
+                <strong>File:</strong> ${fileDisplayText}
             </div>
+            
+            ${renameInfo}
             
             <div style="margin-bottom: 12px;">
                 <strong>Size:</strong> ${this.formatFileSize(result.fileSize)}
@@ -1648,6 +1672,13 @@ class ConfigFileGenerator {
                 message = result.message;
             }
             
+            // 如果文件被重命名，显示重命名信息
+            let displayFileName = result.fileName;
+            if (result.renamed && result.originalFileName) {
+                displayFileName = `${result.originalFileName} → ${result.fileName}`;
+                message += ' (renamed)';
+            }
+            
             return `
                 <div style="
                     display: flex;
@@ -1661,7 +1692,7 @@ class ConfigFileGenerator {
                 ">
                     ${icon}
                     <div style="flex: 1;">
-                        <div style="font-weight: 500;">${result.fileName}</div>
+                        <div style="font-weight: 500;">${displayFileName}</div>
                         <div style="font-size: 0.85rem; color: #666;">
                             ${message}
                         </div>
@@ -1672,6 +1703,8 @@ class ConfigFileGenerator {
         
         // 根据结果显示不同的标题
         let title = '';
+        const renamedCount = saveResults.filter(r => r.renamed).length;
+        
         if (failCount === 0) {
             title = totalCount === 1 ? 'File Generated Successfully' : 'Files Generated Successfully';
         } else if (successCount === 0) {
@@ -1707,6 +1740,20 @@ class ConfigFileGenerator {
             ">
                 ${resultsList}
             </div>
+            
+            ${renamedCount > 0 ? `
+                <div style="
+                    background: #d1ecf1;
+                    color: #0c5460;
+                    padding: 12px;
+                    border-radius: 6px;
+                    margin-bottom: 16px;
+                    border-left: 4px solid #17a2b8;
+                ">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Info:</strong> ${renamedCount} file${renamedCount > 1 ? 's were' : ' was'} automatically renamed to avoid conflicts
+                </div>
+            ` : ''}
             
             ${failCount > 0 ? `
                 <div style="
