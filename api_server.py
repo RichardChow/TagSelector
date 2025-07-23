@@ -25,7 +25,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app)  # 允许跨域请求
+
+# 详细的CORS配置
+CORS(app, 
+     origins=['http://10.91.90.109:8080', 'http://localhost:8080'],
+     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+     allow_headers=['Content-Type', 'Authorization'],
+     supports_credentials=True)
 
 # 数据目录配置
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
@@ -335,6 +341,10 @@ def backup_data():
 @app.route('/jenkins/109/api/saveFile', methods=['POST'])
 def save_file():
     """保存配置文件到服务器指定路径"""
+    import platform
+    import subprocess
+    import tempfile
+    
     try:
         request_data = request.get_json()
         
@@ -347,9 +357,13 @@ def save_file():
         if not file_name or not content:
             return jsonify({'error': '缺少文件名或内容'}), 400
         
-        # 配置服务器保存路径
-        # 注意：这个路径需要根据实际的服务器环境调整
-        server_path = r'\\netstore-ch\R&D TN China\R&D_Server\Version Management\Dev_Version\Version to V&V\AT'
+        # 配置服务器保存路径 - 根据操作系统自动选择
+        if platform.system() == 'Linux':
+            # Linux环境 - 使用mount的路径
+            server_path = '/home/enm/S/Version to V&V/AT'
+        else:
+            # Windows环境 - 使用网络路径
+            server_path = r'\\netstore-ch\R&D TN China\R&D_Server\Version Management\Dev_Version\Version to V&V\AT'
         
         # 检查路径是否存在
         if not os.path.exists(server_path):
@@ -367,6 +381,7 @@ def save_file():
         
         # 保存文件
         try:
+            # 尝试直接写入
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(content)
             
@@ -383,6 +398,45 @@ def save_file():
             })
             
         except PermissionError:
+            # Linux环境下尝试使用sudo权限
+            if platform.system() == 'Linux':
+                try:
+                    
+                    # 创建临时文件
+                    with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as temp_file:
+                        temp_file.write(content)
+                        temp_path = temp_file.name
+                    
+                    # 使用sudo cp命令复制文件
+                    result = subprocess.run([
+                        'sudo', 'cp', temp_path, file_path
+                    ], capture_output=True, text=True, timeout=30)
+                    
+                    # 清理临时文件
+                    os.unlink(temp_path)
+                    
+                    if result.returncode == 0:
+                        logger.info(f"📁 使用sudo权限保存文件成功: {file_path}")
+                        return jsonify({
+                            'success': True,
+                            'message': '文件保存成功 (使用sudo权限)',
+                            'fileName': file_name,
+                            'filePath': file_path,
+                            'location': location_info,
+                            'savedAt': datetime.now().isoformat(),
+                            'fileSize': len(content.encode('utf-8')),
+                            'method': 'sudo'
+                        })
+                    else:
+                        logger.error(f"sudo cp命令失败: {result.stderr}")
+                        raise PermissionError("sudo权限操作失败")
+                        
+                except subprocess.TimeoutExpired:
+                    logger.error("sudo命令超时")
+                    raise PermissionError("sudo命令超时")
+                except Exception as sudo_error:
+                    logger.error(f"sudo操作异常: {str(sudo_error)}")
+                    # 继续执行下面的本地备份逻辑
             # 权限错误，尝试本地备份
             local_backup_path = os.path.join(DATA_DIR, 'generated_configs')
             if not os.path.exists(local_backup_path):
