@@ -640,7 +640,7 @@ class ConfigFileGenerator {
         const args = [];
         this.selectedConfig.tests.forEach(test => {
             // 根据特征名和测试类型生成 --include 参数
-            const argName = `${test.testType}${test.featureName}`;
+            const argName = `${test.testType}AND${test.featureName}`;
             args.push(`--include ${argName}`);
         });
         
@@ -730,7 +730,7 @@ class ConfigFileGenerator {
         if (this.selectedConfig && this.selectedConfig.tests.length > 0) {
             yaml += `args:\n`;
             this.selectedConfig.tests.forEach(test => {
-                const argName = `${test.testType}${test.featureName}`;
+                const argName = `${test.testType}AND${test.featureName}`;
                 yaml += `- --include ${argName}\n`;
             });
         }
@@ -1407,7 +1407,7 @@ class ConfigFileGenerator {
         if (this.selectedConfig && this.selectedConfig.tests.length > 0) {
             yaml += `args:\n`;
             this.selectedConfig.tests.forEach(test => {
-                const argName = `${test.testType}${test.featureName}`;
+                const argName = `${test.testType}AND${test.featureName}`;
                 yaml += `- --include ${argName}\n`;
             });
         }
