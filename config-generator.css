@@ -94,7 +94,7 @@
 /* 主内容区域 - 三栏布局 */
 .generator-main {
     display: grid;
-    grid-template-columns: 320px 360px 1fr;
+    grid-template-columns: 480px 360px 1fr;  /* 左侧从320px增加到480px */
     gap: 20px;
     padding: 20px 24px;
     max-width: 2000px;
@@ -194,9 +194,9 @@
 
 /* 配置项样式 */
 .config-selection-item {
-    padding: 12px 14px;
-    margin: 4px 8px;
-    border-radius: 10px;
+    padding: 8px 10px; /* 减少内边距 */
+    margin: 2px 6px; /* 减少外边距 */
+    border-radius: 8px; /* 稍微减少圆角 */
     cursor: pointer;
     transition: all 0.3s ease;
     background: rgba(255, 255, 255, 0.9);
@@ -204,7 +204,7 @@
     border: 1px solid rgba(255, 255, 255, 0.3);
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
     position: relative;
-    min-height: 70px;
+    min-height: 48px; /* 进一步降低高度 */
     display: flex;
     flex-direction: column;
 }
@@ -266,56 +266,160 @@
 
 .config-item-header {
     display: flex;
+    align-items: center;
     justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 6px;
+    margin-bottom: 2px; /* 进一步减少间距 */
 }
 
 .config-item-name {
     font-weight: 600;
     color: var(--secondary-color);
-    font-size: 0.9rem;
-    line-height: 1.3;
-    flex: 1;
-    padding-right: 8px;
+    font-size: 0.87rem; /* 稍微增大字体提高可读性 */
+    line-height: 1.1; /* 减少行高让布局更紧凑 */
+    width: 100%; /* 占据全宽 */
+    /* 添加文本溢出处理 */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    /* 为tooltip添加样式 */
+    position: relative;
+    cursor: help;
+    flex: 1; /* 占据header中的全部空间 */
 }
 
-.config-item-meta {
-    font-size: 0.7rem;
-    color: #6c757d;
-    text-align: right;
+/* 添加悬停时的tooltip效果 */
+.config-item-name[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
     font-weight: 500;
     white-space: nowrap;
+    max-width: 300px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    animation: tooltipFadeIn 0.2s ease-out;
+    /* 确保不会被截断 */
+    word-break: break-all;
+    overflow-wrap: break-word;
+    white-space: normal;
+    max-width: 280px;
+    line-height: 1.4;
 }
 
-.config-item-description {
-    color: #495057;
-    font-size: 0.75rem;
-    line-height: 1.3;
-    margin-bottom: 6px;
-    display: -webkit-box;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    min-height: 18px;
+/* tooltip淡入动画 */
+@keyframes tooltipFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
-.config-item-description:empty {
-    display: none;
-}
+/* config-item-meta 移除，日期现在在stats行中显示 */
+
+/* config-item-description 移除，简化为两行布局 */
 
 .config-item-stats {
     display: flex;
-    gap: 10px;
-    font-size: 0.7rem;
+    justify-content: space-between; /* 左右分布 */
+    align-items: center;
+    gap: 6px; /* 减少间距 */
+    font-size: 0.7rem; /* 增大字体提高可读性 */
     color: #6c757d;
     margin-top: auto;
+    padding-top: 1px; /* 减少顶部间距 */
 }
 
 .config-item-stats span {
     display: flex;
     align-items: center;
     gap: 4px;
+}
+
+/* 统计信息左侧容器（tags + times） */
+.config-stats-left {
+    display: flex;
+    gap: 10px; /* 减少间距 */
+    align-items: center;
+}
+
+/* 统计信息右侧容器（日期） */
+.config-stats-right {
+    display: flex;
+    align-items: center;
+    opacity: 0.8;
+    font-weight: 400;
+}
+
+/* ===== 置顶功能样式 ===== */
+
+/* 置顶按钮 */
+.pin-btn {
+    background: none;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    opacity: 0.6;
+    color: #6c757d;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    margin-left: 8px;
+    flex-shrink: 0;
+}
+
+.pin-btn:hover {
+    opacity: 1;
+    background: rgba(52, 152, 219, 0.1);
+    color: var(--primary-color);
+    transform: scale(1.1);
+}
+
+.pin-btn.pinned {
+    opacity: 0.8; /* 稍微降低透明度，不那么突出 */
+    color: #ff7043; /* 与TOP标签颜色一致 */
+    background: none; /* 移除背景色 */
+}
+
+.pin-btn.pinned:hover {
+    opacity: 1;
+    color: #ff5722; /* 悬停时稍微深一点 */
+    background: rgba(255, 87, 34, 0.1); /* 悬停时轻微背景 */
+    transform: scale(1.1) rotate(15deg);
+}
+
+/* 置顶项的特殊样式 - 极简化，只保留TOP标签 */
+/* 所有置顶项的特殊样式已移除，保持和普通项一致的外观 */
+
+/* 置顶指示器 */
+.pin-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.7rem;
+    color: #ff7043; /* 稍微调整为与按钮一致的橙色 */
+    font-weight: 600;
+    opacity: 0.9;
+    margin-right: 6px;
+}
+
+.pin-indicator i {
+    font-size: 0.65rem;
+    transform: rotate(45deg);
 }
 
 .config-selection-item.selected .config-item-stats span i {
@@ -760,10 +864,15 @@
 }
 
 .preview-container {
-    border: 2px solid #e9ecef;
-    border-radius: 12px;
+    border: 1px solid #dee2e6; /* 🎨 更细的边框 */
+    border-radius: 10px; /* 🎨 稍小的圆角 */
     overflow: hidden;
     background: white;
+    /* 确保内部滚动区域正确布局 */
+    display: flex;
+    flex-direction: column;
+    /* 🎨 添加轻微阴影提升层次感 */
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .preview-header {
@@ -782,27 +891,62 @@
 }
 
 .yaml-preview {
-    padding: 16px;
-    min-height: 120px;
-    max-height: 200px;
+    padding: 14px 16px; /* 🎨 减少上下内边距 */
+    height: 150px; /* 🎯 降低高度，更紧凑美观 */
     overflow-y: auto;
     overflow-x: auto;
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     font-size: 0.8rem;
-    line-height: 1.4;
-    background: #fafafa;
+    line-height: 1.3; /* 🎨 稍微紧凑的行高 */
+    background: #f8f9fa; /* 🎨 更柔和的背景色 */
     white-space: pre;
     word-break: keep-all;
+    /* 确保滚动条显示在正确位置 */
+    box-sizing: border-box;
+    /* 确保滚动条在底部正确显示 */
+    scrollbar-width: thin;
+    scrollbar-color: #c1c1c1 #f1f1f1;
+    /* 🎨 美观性改进 */
+    border-radius: 0 0 8px 8px; /* 底部圆角 */
+    border-top: 1px solid #e9ecef; /* 顶部分隔线 */
+}
+
+/* WebKit浏览器滚动条样式优化 */
+.yaml-preview::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.yaml-preview::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.yaml-preview::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.yaml-preview::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* 确保水平和垂直滚动条正确定位 */
+.yaml-preview::-webkit-scrollbar-corner {
+    background: #f1f1f1;
 }
 
 .preview-placeholder {
     text-align: center;
     color: #6c757d;
-    height: 120px;
+    height: 150px; /* 🎯 与新的yaml-preview高度保持一致 */
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
+    background: #f8f9fa; /* 🎨 与预览区域背景一致 */
+    border-radius: 0 0 8px 8px; /* 🎨 底部圆角 */
+    border-top: 1px solid #e9ecef; /* 🎨 顶部分隔线 */
 }
 
 .preview-placeholder i {
@@ -1446,17 +1590,17 @@
 }
 
 /* 响应式设计 */
-@media (max-width: 1400px) {
+@media (max-width: 1600px) {
     .generator-main {
-        grid-template-columns: 280px 320px 1fr;
+        grid-template-columns: 420px 320px 1fr; /* 保持左侧较宽，但稍微缩小 */
         gap: 16px;
         padding: 16px 20px;
     }
 }
 
-@media (max-width: 1300px) {
+@media (max-width: 1400px) {
     .generator-main {
-        grid-template-columns: 260px 300px 1fr;
+        grid-template-columns: 380px 300px 1fr; /* 进一步缩小但保持较宽的左侧 */
         gap: 14px;
     }
 }
@@ -1485,6 +1629,58 @@
     .header-left,
     .header-right {
         text-align: center;
+    }
+}
+
+/* 中等屏幕（平板）优化 */
+@media (max-width: 1024px) and (min-width: 769px) {
+    .config-item-name {
+        /* 在平板上名称占据全宽，字体相应调整 */
+        font-size: 0.82rem; /* 增大字体 */
+        width: 100%;
+        line-height: 1.1;
+    }
+    
+    .config-item-stats {
+        font-size: 0.66rem; /* 增大字体 */
+    }
+    
+    .config-stats-right {
+        font-size: 0.64rem; /* 增大字体 */
+    }
+    
+    .config-selection-item {
+        padding: 7px 9px; /* 稍微减少内边距 */
+        margin: 2px 5px; /* 减少外边距 */
+        min-height: 45px; /* 调整最小高度 */
+    }
+    
+    /* 调整tooltip位置避免被截断 */
+    .config-item-name[title]:hover::after {
+        max-width: 250px;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+    
+    .config-item-header {
+        margin-bottom: 2px; /* 减少间距 */
+    }
+    
+    /* 平板端置顶功能样式优化 */
+    .pin-btn {
+        width: 19px;
+        height: 19px;
+        font-size: 0.72rem;
+        margin-left: 7px;
+    }
+    
+    .pin-indicator {
+        font-size: 0.68rem;
+        margin-right: 5px;
+    }
+    
+    .pin-indicator i {
+        font-size: 0.62rem;
     }
 }
 
@@ -1639,26 +1835,70 @@
     
     /* 配置项间距优化 */
     .config-selection-item {
-        margin: 4px 6px;
-        padding: 10px 12px;
-        min-height: 65px;
+        margin: 2px 4px; /* 减少外边距 */
+        padding: 6px 8px; /* 更紧凑的内边距 */
+        min-height: 44px; /* 移动端更小的高度 */
     }
     
     .config-item-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 2px;
-        margin-bottom: 4px;
+        margin-bottom: 2px; /* 减少间距 */
     }
     
     .config-item-name {
-        font-size: 0.85rem;
-        padding-right: 0;
+        font-size: 0.78rem; /* 移动端字体增大 */
+        /* 在移动端显示更多文本，允许换行 */
+        white-space: normal;
+        overflow: visible;
+        text-overflow: initial;
+        line-height: 1.2; /* 减少行高 */
+        max-height: 2.4em; /* 最多显示2行 */
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        line-clamp: 2;
+        width: 100%;
     }
     
-    .config-item-meta {
-        text-align: left;
+    /* 在移动端隐藏tooltip效果，因为触摸设备上hover效果不佳 */
+    .config-item-name[title]:hover::after {
+        display: none;
+    }
+    
+    .config-item-stats {
+        font-size: 0.64rem; /* 移动端统计信息字体增大 */
+        gap: 5px; /* 减少间距 */
+        padding-top: 0px; /* 去掉顶部间距 */
+    }
+    
+    .config-stats-left {
+        gap: 7px; /* 减少间距 */
+    }
+    
+    .config-stats-right {
+        font-size: 0.62rem; /* 日期字体增大 */
+        opacity: 0.75; /* 稍微提高透明度 */
+    }
+    
+    /* 移动端置顶功能样式优化 */
+    .pin-btn {
+        width: 18px;
+        height: 18px;
+        font-size: 0.7rem;
+        margin-left: 6px;
+    }
+    
+    .pin-indicator {
         font-size: 0.65rem;
+        margin-right: 4px;
+    }
+    
+    .pin-indicator i {
+        font-size: 0.6rem;
+    }
+    
+    .config-selection-item.pinned {
+        border-left-width: 2px;
     }
     
     .config-item-description {
@@ -1697,10 +1937,13 @@
     
     /* 小屏幕 YAML 预览优化 */
     .yaml-preview {
-        font-size: 0.7rem;
-        line-height: 1.2;
-        padding: 12px;
+        font-size: 0.75rem; /* 🎨 稍大一点的字体 */
+        line-height: 1.25; /* 🎨 稍宽松的行高 */
+        padding: 12px 14px; /* 🎨 调整内边距 */
         overflow-x: auto;
+        /* 移动端滚动条优化 */
+        -webkit-overflow-scrolling: touch;
+        height: 120px; /* 🎯 移动端更紧凑的高度 */
     }
     
     .yaml-content {

@@ -19,7 +19,7 @@
                     </a>
                 </div>
                 <div class="header-center">
-                    <h1><i class="fas fa-file-code"></i> Txt Generator</h1>
+                    <h1><i class="fas fa-file-code"></i> TXT Generator</h1>
                     <p class="subtitle">Generate deployment txt files from saved test configurations</p>
                 </div>
                 <div class="header-right">
@@ -387,10 +387,10 @@
 
                 <!-- 保存位置选择 -->
                 <div class="save-location-section">
-                    <h3><i class="fas fa-save"></i> Save Location</h3>
+                    <h3><i class="fas fa-save"></i> Save </h3>
                     <div class="location-options">
                         <div class="location-option">
-                            <input type="radio" id="saveLocal" name="saveLocation" value="local" checked>
+                            <input type="radio" id="saveLocal" name="saveLocation" value="local">
                             <label for="saveLocal" class="location-label">
                                 <i class="fas fa-download"></i>
                                 <div class="location-info">
@@ -400,12 +400,12 @@
                             </label>
                         </div>
                         <div class="location-option">
-                            <input type="radio" id="saveServer" name="saveLocation" value="server">
+                            <input type="radio" id="saveServer" name="saveLocation" value="server" checked>
                             <label for="saveServer" class="location-label">
                                 <i class="fas fa-server"></i>
                                 <div class="location-info">
                                     <span class="location-title">Save to Server</span>
-                                    <small>\\netstore-ch\R&D TN China\R&D_Server\Version Management\Dev_Version\Version to V&V\AT</small>
+                                    <small>...\Version Management\Dev_Version\Version to V&V\AT</small>
                                 </div>
                             </label>
                         </div>
@@ -416,48 +416,10 @@
                 <div class="generate-section">
                     <button id="generateFile" class="btn btn-primary btn-generate" disabled>
                         <i class="fas fa-magic"></i>
-                        <span>Generate Configuration Files</span>
+                        <span>Generate txt files</span>
                     </button>
                     <div class="generate-info" id="generateInfo">
                         <small><i class="fas fa-info-circle"></i> FTP path is required to generate files</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 生成结果模态框 -->
-        <div id="generateResultModal" class="modal" style="display: none;">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h4><i class="fas fa-check-circle"></i> File Generated Successfully</h4>
-                    <button class="close-modal" id="closeResultModal">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <div class="result-info">
-                        <div class="result-item">
-                            <label>File Name:</label>
-                            <span id="resultFileName">config-deployment.txt</span>
-                        </div>
-                        <div class="result-item">
-                            <label>Save Location:</label>
-                            <span id="resultLocation">Local Download</span>
-                        </div>
-                        <div class="result-item">
-                            <label>File Size:</label>
-                            <span id="resultFileSize">1.2 KB</span>
-                        </div>
-                        <div class="result-item">
-                            <label>Generated At:</label>
-                            <span id="resultTimestamp">2024-01-15 14:30:25</span>
-                        </div>
-                    </div>
-                    <div class="result-actions">
-                        <button id="downloadAgain" class="btn btn-primary">
-                            <i class="fas fa-download"></i> Download Again
-                        </button>
-                        <button id="generateAnother" class="btn btn-secondary">
-                            <i class="fas fa-plus"></i> Generate Another
-                        </button>
                     </div>
                 </div>
             </div>

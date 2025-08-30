@@ -40,6 +40,75 @@ class ConfigServerDataManager {
             };
         }
     }
+
+    // ================================
+    // 置顶状态服务器端数据持久化
+    // ================================
+    
+    // 从服务器加载置顶状态
+    async loadPinnedConfigs() {
+        try {
+            console.log('🔄 从服务器加载置顶状态...');
+            const response = await fetch(`${this.baseUrl}/loadPinnedConfigs`);
+            
+            if (!response.ok) {
+                if (response.status === 404) {
+                    return { pinnedConfigs: [], source: 'server' };
+                }
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log('✅ 从服务器加载置顶状态成功:', result.pinnedConfigs.length, '个');
+            return { 
+                pinnedConfigs: result.pinnedConfigs || [], 
+                source: 'server'
+            };
+        } catch (error) {
+            console.error('❌ 从服务器加载置顶状态失败:', error);
+            // 降级到localStorage
+            const saved = localStorage.getItem('pinnedConfigs');
+            const pinnedConfigs = saved ? JSON.parse(saved) : [];
+            console.log('📝 降级使用本地localStorage置顶状态');
+            return { 
+                pinnedConfigs: pinnedConfigs, 
+                source: 'local'
+            };
+        }
+    }
+    
+    // 保存置顶状态到服务器
+    async savePinnedConfigs(pinnedConfigs) {
+        try {
+            console.log('💾 保存置顶状态到服务器...', pinnedConfigs.length, '个');
+            
+            const response = await fetch(`${this.baseUrl}/savePinnedConfigs`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    pinnedConfigs: pinnedConfigs
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                console.log('✅ 置顶状态已保存到服务器');
+                return { success: true, source: 'server' };
+            } else {
+                throw new Error(result.error || '服务器返回未知错误');
+            }
+        } catch (error) {
+            console.error('❌ 保存置顶状态到服务器失败:', error);
+            throw error; // 抛出错误让调用者处理降级逻辑
+        }
+    }
 }
 
 /**
@@ -67,6 +136,10 @@ class ConfigFileGenerator {
         
         // 环境文件选择
         this.selectedFiles = []; // 默认不选择任何文件
+        
+        // 置顶功能
+        this.pinnedConfigs = []; // 存储置顶配置的ID列表
+        this.pinnedDataSource = 'unknown'; // 置顶数据来源：'server', 'local', 'unknown'
         
         // 表单字段引用
         this.elements = {
@@ -204,6 +277,14 @@ class ConfigFileGenerator {
             this.savedConfigs = result.configs;
             this.dataSource = result.source;
             
+            // 加载置顶状态
+            await this.loadPinnedConfigs();
+            
+            // 清理无效的置顶配置
+            if (this.savedConfigs.length > 0) {
+                await this.cleanupPinnedConfigs();
+            }
+            
             if (this.savedConfigs.length > 0) {
                 const sourceText = result.source === 'server' ? '服务器' : '本地缓存';
                 console.log(`✅ 成功从${sourceText}加载了 ${this.savedConfigs.length} 个保存的配置`);
@@ -273,18 +354,45 @@ class ConfigFileGenerator {
             const totalTests = config.tests.length;
             const totalTime = config.tests.reduce((sum, test) => sum + test.time, 0);
             
+            // 为悬停提示创建详细信息
+            const itemTooltip = isSelected ? 
+                'Click to deselect this configuration' : 
+                'Click to select this configuration';
+            
+            // 配置名称的悬停提示（如果名称很长，显示完整名称；如果有描述，也显示描述）
+            let nameTooltip = config.name;
+            if (config.description) {
+                nameTooltip = `${config.name}\n\n${config.description}`;
+            }
+            
+            // 检查是否置顶
+            const isPinned = this.pinnedConfigs.includes(config.id);
+            const pinBtnClass = isPinned ? 'pinned' : '';
+            const pinnedClass = isPinned ? 'pinned' : '';
+            
             html += `
-                <div class="config-selection-item ${isSelected ? 'selected' : ''}" 
+                <div class="config-selection-item ${isSelected ? 'selected' : ''} ${pinnedClass}" 
                      data-config-id="${config.id}"
-                     title="${isSelected ? 'Click to deselect this configuration' : 'Click to select this configuration'}">
+                     title="${itemTooltip}">
                     <div class="config-item-header">
-                        <div class="config-item-name">${this.escapeHtml(config.name)}</div>
-                        <div class="config-item-meta">${configDate}</div>
+                        <div class="config-item-name" title="${this.escapeHtml(nameTooltip)}">
+                            ${isPinned ? '<span class="pin-indicator"><i class="fas fa-thumbtack"></i>TOP</span>' : ''}${this.escapeHtml(config.name)}
+                        </div>
+                        <button class="pin-btn ${pinBtnClass}" 
+                                data-config-id="${config.id}" 
+                                title="${isPinned ? 'Unpin this configuration' : 'Pin this configuration to top'}"
+                                onclick="event.stopPropagation(); window.configGenerator.handlePinToggle('${config.id}')">
+                            <i class="fas fa-thumbtack"></i>
+                        </button>
                     </div>
-                    ${config.description ? `<div class="config-item-description">${this.escapeHtml(config.description)}</div>` : ''}
                     <div class="config-item-stats">
-                        <span><i class="fas fa-tags"></i> ${totalTests} tags</span>
-                        <span><i class="fas fa-clock"></i> ${this.formatTime(totalTime)}</span>
+                        <div class="config-stats-left">
+                            <span><i class="fas fa-tags"></i> ${totalTests} tags</span>
+                            <span><i class="fas fa-clock"></i> ${this.formatTime(totalTime)}</span>
+                        </div>
+                        <div class="config-stats-right">
+                            ${configDate}
+                        </div>
                     </div>
                 </div>
             `;
@@ -389,8 +497,16 @@ class ConfigFileGenerator {
                    config.tests.some(test => test.featureName.toLowerCase().includes(searchLower));
         });
         
-        // 排序
+        // 排序 - 置顶项优先
         this.filteredConfigs.sort((a, b) => {
+            // 首先按置顶状态排序
+            const aPinned = this.pinnedConfigs.includes(a.id);
+            const bPinned = this.pinnedConfigs.includes(b.id);
+            
+            if (aPinned && !bPinned) return -1; // a置顶，b不置顶，a在前
+            if (!aPinned && bPinned) return 1;  // b置顶，a不置顶，b在前
+            
+            // 如果两者置顶状态相同，按正常排序规则
             let aVal, bVal;
             
             switch (this.sortBy) {
@@ -1898,6 +2014,135 @@ class ConfigFileGenerator {
             indicator.parentNode.removeChild(indicator);
             console.log('🗑️ 已移除数据来源指示器');
         }
+    }
+    
+    // ================================
+    // 置顶功能相关方法
+    // ================================
+    
+    // 处理置顶按钮点击（同步包装器）
+    handlePinToggle(configId) {
+        // 使用异步包装器，避免onclick中的async问题
+        this.togglePin(configId).catch(error => {
+            console.error('❌ 置顶切换失败:', error);
+            this.showNotification('置顶操作失败', 'error');
+        });
+    }
+    
+    // 切换配置的置顶状态
+    async togglePin(configId) {
+        console.log('切换置顶状态:', configId);
+        
+        const index = this.pinnedConfigs.indexOf(configId);
+        if (index > -1) {
+            // 已置顶，取消置顶
+            this.pinnedConfigs.splice(index, 1);
+            this.showNotification('已取消置顶', 'info');
+            console.log('取消置顶:', configId);
+        } else {
+            // 未置顶，添加置顶
+            this.pinnedConfigs.push(configId);
+            this.showNotification('已置顶到列表顶部', 'success');
+            console.log('添加置顶:', configId);
+        }
+        
+        // 保存置顶状态（异步）
+        await this.savePinnedConfigs();
+        
+        // 重新渲染列表以反映置顶状态变化
+        this.renderConfigList();
+    }
+    
+    // 从服务器/本地加载置顶配置（双重数据源）
+    async loadPinnedConfigs() {
+        try {
+            console.log('🔄 开始加载置顶配置...');
+            
+            // 首先尝试从服务器加载
+            const result = await this.serverDataManager.loadPinnedConfigs();
+            this.pinnedConfigs = result.pinnedConfigs;
+            this.pinnedDataSource = result.source;
+            
+            if (this.pinnedConfigs.length > 0) {
+                const sourceText = result.source === 'server' ? '服务器' : '本地缓存';
+                console.log(`✅ 成功从${sourceText}加载了 ${this.pinnedConfigs.length} 个置顶配置`);
+            } else {
+                console.log('📝 未找到保存的置顶配置');
+            }
+            
+            // 如果从服务器加载成功，同步到本地作为备份
+            if (result.source === 'server') {
+                this.syncPinnedToLocal();
+            }
+            
+        } catch (error) {
+            console.error('❌ 加载置顶配置失败:', error);
+            this.pinnedConfigs = [];
+            this.pinnedDataSource = 'unknown';
+        }
+    }
+    
+    // 保存置顶配置到服务器/本地（双重数据持久化）
+    async savePinnedConfigs() {
+        try {
+            console.log('💾 开始保存置顶配置...', this.pinnedConfigs.length, '个');
+            
+            // 首先尝试保存到服务器
+            try {
+                await this.serverDataManager.savePinnedConfigs(this.pinnedConfigs);
+                this.pinnedDataSource = 'server';
+                
+                // 服务器保存成功后，同步到本地作为备份
+                this.syncPinnedToLocal();
+                
+                console.log('✅ 置顶配置已保存到服务器并同步到本地');
+                
+            } catch (serverError) {
+                console.warn('⚠️ 服务器保存失败，降级到本地保存:', serverError.message);
+                
+                // 服务器保存失败，降级到本地保存
+                this.syncPinnedToLocal();
+                this.pinnedDataSource = 'local';
+                
+                // 显示用户友好的警告信息
+                this.showNotification('置顶设置已保存到本地，服务器连接异常', 'warning');
+            }
+            
+        } catch (error) {
+            console.error('❌ 保存置顶配置完全失败:', error);
+            this.showNotification('保存置顶设置失败', 'error');
+        }
+    }
+    
+    // 同步置顶配置到本地存储（作为备份）
+    syncPinnedToLocal() {
+        try {
+            localStorage.setItem('pinnedConfigs', JSON.stringify(this.pinnedConfigs));
+            console.log('📝 置顶配置已同步到本地存储');
+        } catch (error) {
+            console.error('❌ 同步到本地存储失败:', error);
+        }
+    }
+    
+    // 清理不存在的置顶配置
+    async cleanupPinnedConfigs() {
+        const existingIds = this.savedConfigs.map(config => config.id);
+        const originalLength = this.pinnedConfigs.length;
+        
+        this.pinnedConfigs = this.pinnedConfigs.filter(id => existingIds.includes(id));
+        
+        if (this.pinnedConfigs.length !== originalLength) {
+            console.log(`🧹 清理了 ${originalLength - this.pinnedConfigs.length} 个无效的置顶配置`);
+            await this.savePinnedConfigs();
+        }
+    }
+    
+    // 获取置顶配置的统计信息
+    getPinnedStats() {
+        return {
+            total: this.pinnedConfigs.length,
+            visible: this.filteredConfigs.filter(config => this.pinnedConfigs.includes(config.id)).length
+        };
     }
  
 }
