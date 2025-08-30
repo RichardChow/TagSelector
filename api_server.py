@@ -37,6 +37,7 @@ CORS(app,
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 CURRENT_DATA_FILE = os.path.join(DATA_DIR, 'current_data.json')
 CONFIGS_FILE = os.path.join(DATA_DIR, 'configs.json')
+PINNED_CONFIGS_FILE = os.path.join(DATA_DIR, 'pinned_configs.json')
 
 def ensure_data_directory():
     """确保数据目录存在"""
@@ -276,12 +277,82 @@ def load_configs():
         logger.error(traceback.format_exc())
         return jsonify({'error': f'服务器错误: {str(e)}'}), 500
 
+@app.route('/jenkins/109/api/savePinnedConfigs', methods=['POST'])
+def save_pinned_configs():
+    """保存置顶配置列表"""
+    try:
+        request_data = request.get_json()
+        
+        if not request_data or 'pinnedConfigs' not in request_data:
+            return jsonify({'error': '缺少置顶配置字段'}), 400
+        
+        pinned_configs = request_data['pinnedConfigs']
+        
+        # 验证数据格式（应该是字符串数组）
+        if not isinstance(pinned_configs, list):
+            return jsonify({'error': '置顶配置必须是数组格式'}), 400
+        
+        # 添加元数据
+        save_data = {
+            'pinnedConfigs': pinned_configs,
+            'savedAt': datetime.now().isoformat(),
+            'version': '1.0'
+        }
+        
+        success = save_json_file(PINNED_CONFIGS_FILE, save_data)
+        
+        if success:
+            logger.info(f"📌 已保存置顶配置，数量: {len(pinned_configs)}")
+            return jsonify({
+                'success': True,
+                'message': '置顶配置保存成功',
+                'savedAt': save_data['savedAt'],
+                'count': len(pinned_configs)
+            })
+        else:
+            return jsonify({'error': '保存置顶配置失败'}), 500
+            
+    except Exception as e:
+        logger.error(f"❌ 保存置顶配置异常: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': f'服务器错误: {str(e)}'}), 500
+
+@app.route('/jenkins/109/api/loadPinnedConfigs', methods=['GET'])
+def load_pinned_configs():
+    """加载置顶配置列表"""
+    try:
+        saved_data = load_json_file(PINNED_CONFIGS_FILE)
+        
+        if saved_data is None:
+            logger.info("📝 没有找到保存的置顶配置")
+            return jsonify({
+                'success': True,
+                'pinnedConfigs': [],
+                'savedAt': None
+            })
+        
+        pinned_configs = saved_data.get('pinnedConfigs', [])
+        logger.info(f"✅ 加载置顶配置成功，数量: {len(pinned_configs)}")
+        
+        return jsonify({
+            'success': True,
+            'pinnedConfigs': pinned_configs,
+            'savedAt': saved_data.get('savedAt'),
+            'version': saved_data.get('version', '1.0')
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ 加载置顶配置异常: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': f'服务器错误: {str(e)}'}), 500
+
 @app.route('/jenkins/109/api/status', methods=['GET'])
 def api_status():
     """API状态检查"""
     try:
         current_data_exists = os.path.exists(CURRENT_DATA_FILE)
         configs_exists = os.path.exists(CONFIGS_FILE)
+        pinned_configs_exists = os.path.exists(PINNED_CONFIGS_FILE)
         
         status_info = {
             'status': 'healthy',
@@ -289,6 +360,7 @@ def api_status():
             'dataDirectory': DATA_DIR,
             'currentDataExists': current_data_exists,
             'configsExists': configs_exists,
+            'pinnedConfigsExists': pinned_configs_exists,
             'version': '1.0'
         }
         
@@ -521,6 +593,7 @@ if __name__ == '__main__':
     logger.info(f"📁 数据目录: {DATA_DIR}")
     logger.info(f"📄 当前数据文件: {CURRENT_DATA_FILE}")
     logger.info(f"⚙️ 配置文件: {CONFIGS_FILE}")
+    logger.info(f"📌 置顶配置文件: {PINNED_CONFIGS_FILE}")
     logger.info("🌐 服务器配置：")
     logger.info("   - 监听地址: 0.0.0.0:5000 (所有接口)")
     logger.info("   - 前端地址: http://10.91.90.109:8080/jenkins//109/tools/web/tagSelecter.html")
