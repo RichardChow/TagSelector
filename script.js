@@ -1912,6 +1912,19 @@ class TestSelectorApp {
         return null;
     }
 
+    // 查找子功能的父功能
+    findParentFeature(subFeatureId) {
+        if (!this.currentData || !this.currentData.featureGroups) return null;
+        for (const group of this.currentData.featureGroups) {
+            for (const feature of group.features) {
+                if (feature.subFeatures && feature.subFeatures.some(sf => sf.id === subFeatureId)) {
+                    return feature;
+                }
+            }
+        }
+        return null;
+    }
+
     getTestTypeDisplayName(testType) {
         const displayNames = {
             'ci_night': 'CI Night',
@@ -2034,9 +2047,62 @@ class TestSelectorApp {
             return;
         }
         
-        // 生成新格式的命令：- --include test_levelANDfeature_tag
-        const commands = this.selectedTests.map(test => {
-            return `- --include ${test.testType}AND${test.featureName}`;
+        // 优化选中项：如果有子特性的Feature的所有可用子特性都被选中，则使用父Feature
+        // 按测试类型分组
+        const testsByType = {};
+        this.selectedTests.forEach(test => {
+            if (!testsByType[test.testType]) {
+                testsByType[test.testType] = [];
+            }
+            testsByType[test.testType].push(test);
+        });
+
+        const commands = [];
+
+        Object.entries(testsByType).forEach(([testType, tests]) => {
+            // 按父功能分组
+            const testsByParent = {}; // parentId -> {parent: featureObj, selectedChildren: []}
+            const orphans = [];
+
+            tests.forEach(test => {
+                const parent = this.findParentFeature(test.featureId);
+                if (parent) {
+                    if (!testsByParent[parent.id]) {
+                        testsByParent[parent.id] = {
+                            parent: parent,
+                            selectedChildren: []
+                        };
+                    }
+                    testsByParent[parent.id].selectedChildren.push(test);
+                } else {
+                    orphans.push(test);
+                }
+            });
+
+            // 处理有父功能的情况
+            Object.values(testsByParent).forEach(({parent, selectedChildren}) => {
+                // 找出该测试级别下所有实际可用的子功能
+                // 必须确保只统计在该级别下实际有测试的子功能
+                const availableSubFeatures = parent.subFeatures.filter(sf => 
+                    sf.tests && sf.tests[testType] && !sf.tests[testType].isEmpty
+                );
+
+                if (availableSubFeatures.length > 0 && availableSubFeatures.length === selectedChildren.length) {
+                    // 所有可用子功能都被选中 -> 使用父功能名称
+                    commands.push(`- --include ${testType}AND${parent.name}`);
+                    console.log(`[Command Optimizer] Collapsed ${selectedChildren.length} sub-features into parent: ${parent.name} (${testType})`);
+                } else {
+                    // 未全选 -> 使用各自的子功能名称
+                    selectedChildren.forEach(child => {
+                        commands.push(`- --include ${child.testType}AND${child.featureName}`);
+                    });
+                }
+            });
+
+            // 处理无父功能的情况（即Feature本身就是叶子节点）
+            orphans.forEach(test => {
+                commands.push(`- --include ${test.testType}AND${test.featureName}`);
+            });
         });
         
         // 每个命令换行显示
