@@ -121,7 +121,7 @@ class ConfigFileGenerator {
         // 服务器数据管理器
         this.serverDataManager = new ConfigServerDataManager();
         
-        this.selectedConfig = null; // 当前选择的配置
+        this.selectedConfigs = []; // 当前选择的配置列表 (Multiple selection)
         this.savedConfigs = []; // 保存的配置列表
         this.filteredConfigs = []; // 过滤后的配置列表
         this.yamlContent = ''; // 生成的YAML内容
@@ -349,7 +349,7 @@ class ConfigFileGenerator {
         // 渲染配置项
         html += '<div class="config-items-container">';
         currentPageConfigs.forEach(config => {
-            const isSelected = this.selectedConfig && this.selectedConfig.id === config.id;
+            const isSelected = this.selectedConfigs.some(c => c.id === config.id);
             const configDate = new Date(config.createdAt).toLocaleDateString();
             const totalTests = config.tests.length;
             const totalTime = config.tests.reduce((sum, test) => sum + test.time, 0);
@@ -700,49 +700,43 @@ class ConfigFileGenerator {
     }
     
     selectConfig(configId) {
-        // 如果点击的是已选中的配置，则取消选择
-        if (this.selectedConfig && this.selectedConfig.id === configId) {
-            this.selectedConfig = null;
-            console.log('取消选择配置');
-            
-            // 更新界面
-            this.renderConfigList(); // 重新渲染以显示选中状态
-            this.generateArgsFromConfig();
-            this.updatePreview();
-            this.validateForm();
-            this.updateInterfaceState();
-            
-            this.showNotification('已取消配置选择', 'info');
-            return;
-        }
-        
         // 查找配置
         const config = this.savedConfigs.find(c => c.id === configId);
         if (!config) {
             console.error('配置未找到:', configId);
             return;
         }
+
+        // 检查是否已选中
+        const index = this.selectedConfigs.findIndex(c => c.id === configId);
         
-        this.selectedConfig = config;
-        console.log('选择了配置:', config.name);
+        if (index > -1) {
+            // 已选中，取消选择
+            this.selectedConfigs.splice(index, 1);
+            console.log('取消选择配置:', config.name);
+            this.showNotification(`已取消配置: ${config.name}`, 'info');
+        } else {
+            // 未选中，添加到选择列表
+            this.selectedConfigs.push(config);
+            console.log('选择了配置:', config.name);
+            this.showNotification(`已选择配置: ${config.name}`, 'success');
+        }
         
         // 更新界面
         this.renderConfigList(); // 重新渲染以显示选中状态
-        this.generateArgsFromConfig();
+        this.generateArgsFromConfigs();
         this.updatePreview();
         this.validateForm();
         this.updateInterfaceState();
-        
-        this.showNotification(`已选择配置: ${config.name}`, 'success');
     }
     
-    generateArgsFromConfig() {
-        if (!this.selectedConfig) {
+    generateArgsFromConfigs() {
+        if (this.selectedConfigs.length === 0) {
             if (this.elements.argsPreview) {
                 this.elements.argsPreview.innerHTML = `
                     <div class="args-placeholder">
                         <i class="fas fa-magic"></i>
-                        <p>Arguments will be auto-generated from selected configuration</p>
+                        <p>Arguments will be auto-generated from selected configurations</p>
                     </div>
                 `;
             }
@@ -752,13 +746,18 @@ class ConfigFileGenerator {
             return;
         }
         
-        // 从选择的配置生成 args 参数
-        const args = [];
-        this.selectedConfig.tests.forEach(test => {
-            // 根据特征名和测试类型生成 --include 参数
-            const argName = `${test.testType}AND${test.featureName}`;
-            args.push(`--include ${argName}`);
+        // 从所有选择的配置生成 args 参数，并去重
+        const argsSet = new Set();
+        
+        this.selectedConfigs.forEach(config => {
+            config.tests.forEach(test => {
+                // 根据特征名和测试类型生成 --include 参数
+                const argName = `${test.testType}AND${test.featureName}`;
+                argsSet.add(`--include ${argName}`);
+            });
         });
+        
+        const args = Array.from(argsSet);
         
         // 更新界面
         if (this.elements.argsCount) {
@@ -779,7 +778,7 @@ class ConfigFileGenerator {
                 this.elements.argsPreview.innerHTML = `
                     <div class="args-placeholder">
                         <i class="fas fa-exclamation-triangle"></i>
-                        <p>No test selections found in this configuration</p>
+                        <p>No test selections found in selected configurations</p>
                     </div>
                 `;
             }
@@ -843,12 +842,24 @@ class ConfigFileGenerator {
         }
         
         // args: 只有有选择的配置且有测试项时才输出
-        if (this.selectedConfig && this.selectedConfig.tests.length > 0) {
-            yaml += `args:\n`;
-            this.selectedConfig.tests.forEach(test => {
-                const argName = `${test.testType}AND${test.featureName}`;
-                yaml += `- --include ${argName}\n`;
+        if (this.selectedConfigs && this.selectedConfigs.length > 0) {
+            // 收集所有args并去重
+            const argsSet = new Set();
+            this.selectedConfigs.forEach(config => {
+                if (config.tests && config.tests.length > 0) {
+                    config.tests.forEach(test => {
+                        const argName = `${test.testType}AND${test.featureName}`;
+                        argsSet.add(`- --include ${argName}`);
+                    });
+                }
             });
+            
+            if (argsSet.size > 0) {
+                yaml += `args:\n`;
+                argsSet.forEach(arg => {
+                    yaml += `${arg}\n`;
+                });
+            }
         }
         
         return yaml;
@@ -856,7 +867,7 @@ class ConfigFileGenerator {
     
     validateForm() {
         const ftpPath = this.elements.ftpPath.value.trim();
-        const hasConfig = this.selectedConfig !== null;
+        const hasConfig = this.selectedConfigs.length > 0;
         
         // 只需要 ftp_path 就可以生成文件，配置是可选的
         const isValid = !!ftpPath;
@@ -868,7 +879,7 @@ class ConfigFileGenerator {
             if (hasConfig) {
                 if (this.elements.generateInfo) {
                     this.elements.generateInfo.innerHTML = `
-                        <small><i class="fas fa-check-circle"></i> Ready to generate ${fileCount} configuration file${fileCount > 1 ? 's' : ''} with args</small>
+                        <small><i class="fas fa-check-circle"></i> Ready to generate ${fileCount} configuration file${fileCount > 1 ? 's' : ''} with merged args</small>
                     `;
                 }
             } else {
@@ -890,10 +901,10 @@ class ConfigFileGenerator {
     updateInterfaceState() {
         // 更新配置状态 - 检查元素是否存在
         if (this.elements.configStatus) {
-            if (this.selectedConfig) {
+            if (this.selectedConfigs.length > 0) {
                 this.elements.configStatus.innerHTML = `
                     <span class="status-indicator success">
-                        <i class="fas fa-check-circle"></i> 
+                        <i class="fas fa-check-circle"></i> ${this.selectedConfigs.length} selected
                     </span>
                 `;
             } else {
@@ -939,13 +950,18 @@ class ConfigFileGenerator {
     generateSmartFileName() {
         let baseName = 'config-deployment';
         
-        if (this.selectedConfig) {
-            // 基于选择的配置名称生成文件名
-            baseName = this.selectedConfig.name
-                .toLowerCase()
-                .replace(/[^a-z0-9]/g, '-')
-                .replace(/-+/g, '-')
-                .replace(/^-|-$/g, '');
+        if (this.selectedConfigs && this.selectedConfigs.length > 0) {
+            if (this.selectedConfigs.length === 1) {
+                // 单个配置：基于选择的配置名称生成文件名
+                baseName = this.selectedConfigs[0].name
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]/g, '-')
+                    .replace(/-+/g, '-')
+                    .replace(/^-|-$/g, '');
+            } else {
+                // 多个配置：使用 multi-config 前缀
+                baseName = `multi-config-${this.selectedConfigs.length}`;
+            }
         }
         
         // 添加时间戳
@@ -953,8 +969,10 @@ class ConfigFileGenerator {
         const timestamp = now.toISOString().slice(0, 16).replace(/[:-]/g, '').replace('T', '-');
         const fileName = `${baseName}-${timestamp}`;
         
-        this.elements.fileName.value = fileName;
-        this.showNotification('智能文件名已生成', 'success');
+        if (this.elements.fileName) {
+            this.elements.fileName.value = fileName;
+            this.showNotification('智能文件名已生成', 'success');
+        }
     }
     
     async copyPreviewToClipboard() {
@@ -1520,12 +1538,24 @@ class ConfigFileGenerator {
         }
         
         // 添加args（如果有选择的配置）
-        if (this.selectedConfig && this.selectedConfig.tests.length > 0) {
-            yaml += `args:\n`;
-            this.selectedConfig.tests.forEach(test => {
-                const argName = `${test.testType}AND${test.featureName}`;
-                yaml += `- --include ${argName}\n`;
+        if (this.selectedConfigs && this.selectedConfigs.length > 0) {
+            // 收集所有args并去重
+            const argsSet = new Set();
+            this.selectedConfigs.forEach(config => {
+                if (config.tests && config.tests.length > 0) {
+                    config.tests.forEach(test => {
+                        const argName = `${test.testType}AND${test.featureName}`;
+                        argsSet.add(`- --include ${argName}`);
+                    });
+                }
             });
+            
+            if (argsSet.size > 0) {
+                yaml += `args:\n`;
+                argsSet.forEach(arg => {
+                    yaml += `${arg}\n`;
+                });
+            }
         }
         
         return yaml;
