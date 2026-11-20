@@ -1,0 +1,11 @@
+# Python API server runtime artifacts (server/)
+server/data/
+server/logs/
+server/venv/
+server/*.log
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db

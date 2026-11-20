@@ -87,15 +87,19 @@ Router Features            | bgp_routing  | bgp_ipv4        | BGP IPv4路由测�
 ## 🏗️ 项目结构
 
 ```
-feature_web/
-├── index.html          # 主页面文件
+.
+├── tag-selector.html   # 主页面（测试标签选择器）
+├── txt-generator.html  # 部署TXT配置生成器
 ├── styles.css          # 样式文件（支持多层级显示）
-├── script.js           # 主要JavaScript逻辑
+├── script.js           # 标签选择器主要JavaScript逻辑
 ├── data.js             # 数据结构和工具函数
+├── config-generator.js # TXT生成器JavaScript逻辑
+├── config-generator.css# TXT生成器样式
 ├── README.md           # 项目文档
-├── deploy-to-jenkins.sh    # Jenkins部署脚本
-├── jenkins-deploy.yml      # Jenkins Pipeline配置
-└── featureTag.xlsx     # Excel数据样例文件
+├── docs/               # 功能说明、部署与集成文档
+├── server/             # Python API服务器（api_server.py、启动脚本、Java版数据API、本地测试）
+├── deploy/             # Jenkins部署脚本与Pipeline配置
+└── samples/            # Excel数据样例文件（featureTag.xlsx、SuiteTag.xlsx）
 ```
 
 ## 🧪 测试功能
@@ -178,8 +182,8 @@ feature_web/
 ## 🚀 部署说明
 
 ### Jenkins部署
-1. 使用提供的`deploy-to-jenkins.sh`脚本
-2. 或使用`jenkins-deploy.yml` Pipeline配置
+1. 使用提供的`deploy/deploy-to-jenkins.sh`脚本
+2. 或使用`deploy/jenkins-deploy.yml` Pipeline配置
 3. 确保Jenkins环境支持Node.js和Web服务器
 
 ### 手动部署
@@ -276,12 +280,12 @@ SessionStorage - 会话数据
 当前数据保存
 🛠 开发工具和配置
 Jenkins - CI/CD集成
-jenkins-deploy.yml
-deploy-to-jenkins.sh
+deploy/jenkins-deploy.yml
+deploy/deploy-to-jenkins.sh
 Git - 版本控制
 Batch/Shell脚本 - 自动化部署
-start_api.bat (Windows)
-start_api.sh (Linux/macOS)
+server/start_api.bat (Windows)
+server/start_api.sh (Linux/macOS)
 📄 文档和规范
 Markdown - 文档编写
 README.md
