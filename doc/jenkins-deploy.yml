@@ -1,0 +1,138 @@
+pipeline {
+    agent any
+    
+    environment {
+        // Jenkins工作目录
+        WORKSPACE_DIR = "${WORKSPACE}"
+        // 发布目录 - 需要根据实际Jenkins配置调整
+        PUBLISH_DIR = "/var/www/html/test-selector"
+    }
+    
+    stages {
+        stage('检出代码') {
+            steps {
+                echo '检出测试标签选择器代码...'
+                // 如果代码在Git仓库中，使用git checkout
+                // git url: 'your-git-repo-url'
+                
+                // 或者直接复制文件到workspace
+                script {
+                    writeFile file: 'index.html', text: libraryResource('test-selector/index.html')
+                    writeFile file: 'styles.css', text: libraryResource('test-selector/styles.css')
+                    writeFile file: 'script.js', text: libraryResource('test-selector/script.js')
+                    writeFile file: 'data.js', text: libraryResource('test-selector/data.js')
+                }
+            }
+        }
+        
+        stage('验证文件') {
+            steps {
+                echo '验证HTML、CSS和JavaScript文件...'
+                script {
+                    // 检查必要文件是否存在
+                    if (!fileExists('index.html')) {
+                        error('index.html文件不存在')
+                    }
+                    if (!fileExists('styles.css')) {
+                        error('styles.css文件不存在')
+                    }
+                    if (!fileExists('script.js')) {
+                        error('script.js文件不存在')
+                    }
+                    if (!fileExists('data.js')) {
+                        error('data.js文件不存在')
+                    }
+                    echo '所有必要文件验证通过'
+                }
+            }
+        }
+        
+        stage('部署到Web服务器') {
+            steps {
+                echo '部署文件到Web服务器...'
+                script {
+                    // 创建发布目录
+                    sh "mkdir -p ${PUBLISH_DIR}"
+                    
+                    // 复制文件到发布目录
+                    sh "cp *.html ${PUBLISH_DIR}/"
+                    sh "cp *.css ${PUBLISH_DIR}/"
+                    sh "cp *.js ${PUBLISH_DIR}/"
+                    
+                    // 设置正确的权限
+                    sh "chmod 644 ${PUBLISH_DIR}/*"
+                    sh "chmod 755 ${PUBLISH_DIR}"
+                    
+                    echo '文件部署完成'
+                }
+            }
+        }
+        
+        stage('生成访问链接') {
+            steps {
+                script {
+                    def jenkinsUrl = env.JENKINS_URL
+                    def jobName = env.JOB_NAME
+                    def buildNumber = env.BUILD_NUMBER
+                    
+                    echo "=========================================="
+                    echo "部署完成！"
+                    echo "访问地址: ${jenkinsUrl}userContent/test-selector/"
+                    echo "或者: http://10.91.90.109:8080/jenkins/userContent/test-selector/"
+                    echo "=========================================="
+                    
+                    // 创建用户内容目录（如果使用Jenkins用户内容服务）
+                    sh """
+                        mkdir -p ${JENKINS_HOME}/userContent/test-selector
+                        cp *.html ${JENKINS_HOME}/userContent/test-selector/
+                        cp *.css ${JENKINS_HOME}/userContent/test-selector/
+                        cp *.js ${JENKINS_HOME}/userContent/test-selector/
+                        chmod 644 ${JENKINS_HOME}/userContent/test-selector/*
+                    """
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            echo '清理工作空间...'
+            // 保留重要文件，清理临时文件
+        }
+        
+        success {
+            echo '部署成功！测试标签选择器已经可以访问。'
+            
+            // 发送成功通知（可选）
+            script {
+                def message = """
+                测试标签选择器部署成功！
+                
+                访问地址: ${env.JENKINS_URL}userContent/test-selector/
+                构建号: ${env.BUILD_NUMBER}
+                构建时间: ${new Date()}
+                """
+                
+                // 这里可以添加邮件或其他通知方式
+                echo message
+            }
+        }
+        
+        failure {
+            echo '部署失败！请检查错误日志。'
+            
+            // 发送失败通知（可选）
+            script {
+                def message = """
+                测试标签选择器部署失败！
+                
+                错误信息请查看构建日志
+                构建号: ${env.BUILD_NUMBER}
+                构建时间: ${new Date()}
+                """
+                
+                echo message
+            }
+        }
+    }
+} 
