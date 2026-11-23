@@ -9,3 +9,6 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+
+# Generated test-suite inventory (build_output from Case/test_suite scan)
+output/
