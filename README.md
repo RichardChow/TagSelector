@@ -90,6 +90,7 @@ Router Features            | bgp_routing  | bgp_ipv4        | BGP IPv4路由测�
 .
 ├── tag-selector.html   # 主页面（测试标签选择器）
 ├── txt-generator.html  # 部署TXT配置生成器
+├── suite-tag-tree.html # Test Suite 结构与 Tag 一览（双击即可打开）
 ├── styles.css          # 样式文件（支持多层级显示）
 ├── script.js           # 标签选择器主要JavaScript逻辑
 ├── data.js             # 数据结构和工具函数
@@ -99,8 +100,23 @@ Router Features            | bgp_routing  | bgp_ipv4        | BGP IPv4路由测�
 ├── docs/               # 功能说明、部署与集成文档
 ├── server/             # Python API服务器（api_server.py、启动脚本、Java版数据API、本地测试）
 ├── deploy/             # Jenkins部署脚本与Pipeline配置
+├── scripts/            # 从测试套件目录提取 tag、生成 suite-tag-tree.html 的脚本
 └── samples/            # Excel数据样例文件（featureTag.xlsx、SuiteTag.xlsx）
 ```
+
+## 🌲 Test Suite 结构与 Tag 一览
+
+`suite-tag-tree.html` 是一个独立页面，不需要服务器和网络，下载后双击就能打开。它按 suite → 次级 suite → test 文件 → test case 逐层展开，每一行只显示该层自己写的 tag（suite 和次级 suite 取自 `__init__.robot`，test 文件取自文件开头的设置，test case 取自它自己的 `[Tags]`），`robot:` 开头的内置 tag 已排除。
+
+页面里的数据是测试套件目录的一份快照，文件顶部标着快照时间。测试套件有变动后重新生成：
+
+```
+python scripts/extract_suite_tags.py      # 扫描 ../../Case/test_suite，结果输出到 output/
+python scripts/verify_suite_tags.py       # 可选：用 Robot Framework 运行时逐个 test case 核对
+python scripts/build_suite_tag_tree.py    # 把数据写进 suite-tag-tree.html
+```
+
+需要安装 `robotframework` 和 `openpyxl`；测试套件目录不在默认位置时，用 `--suite-dir` 指定。
 
 ## 🧪 测试功能
 
